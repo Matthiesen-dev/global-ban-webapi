@@ -2,6 +2,14 @@
 import Layout from "../../layouts/Layout.astro";
 import { runAction, runtime } from "../../runtime";
 import {
+    cancelRequest,
+    cancelSubscription,
+    listMyInvites,
+    listMyRequests,
+    requestJoin,
+    respondInvite,
+} from "../../services/membership";
+import {
     createCommunity,
     listCommunities,
     subscribe,
@@ -12,14 +20,24 @@ let error: string | null = null;
 
 if (Astro.request.method === "POST") {
     const form = await Astro.request.formData();
-    if (form.get("intent") === "subscribe") {
+    const intent = form.get("intent");
+    const id = String(form.get("id") ?? "").trim();
+    if (intent === "subscribe") {
         error = await runAction(
-            subscribe(
-                user.id,
-                String(form.get("subscriber")),
-                String(form.get("source")).trim(),
-            ),
+            subscribe(user.id, String(form.get("subscriber")), id),
         );
+    } else if (intent === "unsubscribe") {
+        error = await runAction(
+            cancelSubscription(user.id, String(form.get("subscriber")), id),
+        );
+    } else if (intent === "accept-invite" || intent === "decline-invite") {
+        error = await runAction(
+            respondInvite(user, id, intent === "accept-invite"),
+        );
+    } else if (intent === "request-join") {
+        error = await runAction(requestJoin(user.id, id));
+    } else if (intent === "cancel-request") {
+        error = await runAction(cancelRequest(user.id, id));
     } else {
         const name = String(form.get("name") ?? "").trim();
         if (name) error = await runAction(createCommunity(user.id, name));
@@ -27,51 +45,142 @@ if (Astro.request.method === "POST") {
     if (!error) return Astro.redirect(Astro.url.pathname);
 }
 
-const communities = await runtime.runPromise(listCommunities(user.id));
+const [communities, invites, requests] = await Promise.all([
+    runtime.runPromise(listCommunities(user.id)),
+    runtime.runPromise(listMyInvites(user)),
+    runtime.runPromise(listMyRequests(user.id)),
+]);
 ---
 
 <Layout title="Communities">
     <h1 class="mb-4 text-2xl font-bold">Communities</h1>
     {error && <p class="mb-4 rounded bg-red-900 p-2">{error}</p>}
 
-    <form method="post" class="mb-8 flex gap-2">
-        <input
-            name="name"
-            placeholder="New community name"
-            required
-            class="rounded bg-slate-800 p-2"
-        />
-        <button class="rounded bg-slate-100 px-4 py-2 text-slate-900"
-            >Create</button
-        >
-    </form>
+    {
+        invites.length > 0 && (
+            <section class="mb-6 rounded border border-slate-700 p-4">
+                <h2 class="mb-2 font-semibold">Invitations</h2>
+                {invites.map((i) => (
+                    <form method="post" class="flex items-center gap-3">
+                        <input type="hidden" name="id" value={i.communityId} />
+                        <span>
+                            {i.communityName} as {i.role}
+                        </span>
+                        <button
+                            name="intent"
+                            value="accept-invite"
+                            class="text-green-400"
+                        >
+                            Accept
+                        </button>
+                        <button
+                            name="intent"
+                            value="decline-invite"
+                            class="text-red-400"
+                        >
+                            Decline
+                        </button>
+                    </form>
+                ))}
+            </section>
+        )
+    }
+
+    <div class="mb-8 flex flex-wrap gap-6">
+        <form method="post" class="flex gap-2">
+            <input
+                name="name"
+                placeholder="New community name"
+                required
+                class="rounded bg-slate-800 p-2"
+            />
+            <button class="rounded bg-slate-100 px-4 py-2 text-slate-900"
+                >Create</button
+            >
+        </form>
+        <form method="post" class="flex gap-2">
+            <input type="hidden" name="intent" value="request-join" />
+            <input
+                name="id"
+                placeholder="Community ID to request access"
+                required
+                class="w-80 rounded bg-slate-800 p-2"
+            />
+            <button class="rounded border border-slate-600 px-4 py-2"
+                >Request to join</button
+            >
+        </form>
+    </div>
+
+    {
+        requests.length > 0 && (
+            <section class="mb-6 text-sm">
+                <h2 class="mb-1 font-semibold">Pending join requests</h2>
+                {requests.map((r) => (
+                    <form method="post" class="flex gap-3">
+                        <input
+                            type="hidden"
+                            name="intent"
+                            value="cancel-request"
+                        />
+                        <input type="hidden" name="id" value={r.communityId} />
+                        <span>{r.communityId}</span>
+                        <button class="text-red-400">Cancel</button>
+                    </form>
+                ))}
+            </section>
+        )
+    }
 
     {
         communities.map((c) => (
             <section class="mb-6 rounded border border-slate-800 p-4">
                 <h2 class="font-semibold">
-                    {c.name}{" "}
+                    <a
+                        href={`/dashboard/communities/${c.id}`}
+                        class="hover:underline"
+                    >
+                        {c.name}
+                    </a>{" "}
                     <span class="text-sm text-slate-400">({c.role})</span>
                 </h2>
                 <p class="text-sm text-slate-400">ID: {c.id}</p>
-                <p class="mt-2 text-sm">
-                    Subscribed to:{" "}
-                    {c.subscriptions.length
-                        ? c.subscriptions.join(", ")
-                        : "none"}
-                </p>
+                <div class="mt-2 text-sm">
+                    Subscriptions: {c.subscriptions.length === 0 && "none"}
+                    {c.subscriptions.map((s) => (
+                        <form method="post" class="inline-flex gap-2 pr-4">
+                            <input
+                                type="hidden"
+                                name="intent"
+                                value="unsubscribe"
+                            />
+                            <input
+                                type="hidden"
+                                name="subscriber"
+                                value={c.id}
+                            />
+                            <input type="hidden" name="id" value={s.id} />
+                            <span>
+                                {s.id} ({s.status})
+                            </span>
+                            {c.role !== "member" && (
+                                <button class="text-red-400">Remove</button>
+                            )}
+                        </form>
+                    ))}
+                </div>
                 {c.role !== "member" && (
                     <form method="post" class="mt-2 flex gap-2">
                         <input type="hidden" name="intent" value="subscribe" />
                         <input type="hidden" name="subscriber" value={c.id} />
                         <input
-                            name="source"
-                            placeholder="Community ID to subscribe to"
+                            name="id"
+                            placeholder="Community ID to request a subscription to"
                             required
                             class="w-96 rounded bg-slate-800 p-2"
                         />
                         <button class="text-slate-300 hover:text-white">
-                            Subscribe
+                            Request subscription
                         </button>
                     </form>
                 )}

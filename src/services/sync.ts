@@ -113,7 +113,12 @@ export const sync = (serverUuid: string, incoming: SyncData) =>
                     const subs = await tx
                         .select({ id: communitySubscription.sourceCommunityId })
                         .from(communitySubscription)
-                        .where(eq(communitySubscription.subscriberCommunityId, communityId));
+                        .where(
+                            and(
+                                eq(communitySubscription.subscriberCommunityId, communityId),
+                                eq(communitySubscription.status, 'approved'),
+                            ),
+                        );
                     const visible = [communityId, ...subs.map((s) => s.id)];
                     await tx.update(server).set({ lastSeenAt: now }).where(eq(server.uuid, serverUuid));
                     await ingest(tx, serverUuid, communityId, visible, incoming, now);

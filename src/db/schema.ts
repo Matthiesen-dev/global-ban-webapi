@@ -8,6 +8,8 @@ export const user = sqliteTable('user', {
     email: text('email').notNull().unique(),
     emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
     image: text('image'),
+    // Lowercased GitHub username, set from the OAuth profile on signup.
+    githubLogin: text('github_login').unique(),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
@@ -81,8 +83,34 @@ export const communitySubscription = sqliteTable(
     {
         subscriberCommunityId: text('subscriber_community_id').notNull().references(() => community.id, { onDelete: 'cascade' }),
         sourceCommunityId: text('source_community_id').notNull().references(() => community.id, { onDelete: 'cascade' }),
+        // Only the source community's admins can move this to 'approved'; sync ignores pending rows.
+        status: text('status', { enum: ['pending', 'approved'] }).notNull().default('pending'),
+        createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
     },
     (t) => [primaryKey({ columns: [t.subscriberCommunityId, t.sourceCommunityId] })],
+);
+
+// Invites are keyed by lowercased GitHub username and redeemable only by that GitHub account.
+export const communityInvite = sqliteTable(
+    'community_invite',
+    {
+        communityId: text('community_id').notNull().references(() => community.id, { onDelete: 'cascade' }),
+        githubLogin: text('github_login').notNull(),
+        role: text('role', { enum: ['admin', 'member'] }).notNull(),
+        invitedByUserId: text('invited_by_user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+        createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    },
+    (t) => [primaryKey({ columns: [t.communityId, t.githubLogin] })],
+);
+
+export const communityJoinRequest = sqliteTable(
+    'community_join_request',
+    {
+        communityId: text('community_id').notNull().references(() => community.id, { onDelete: 'cascade' }),
+        userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+        createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    },
+    (t) => [primaryKey({ columns: [t.communityId, t.userId] })],
 );
 
 export const punishment = sqliteTable(

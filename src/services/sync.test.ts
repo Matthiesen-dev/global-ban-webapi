@@ -75,8 +75,16 @@ describe('sync', () => {
 
     it('delivers across communities with a subscription', async () => {
         await run(A, [ban(A)]);
-        await db.insert(communitySubscription).values({ subscriberCommunityId: 'c2', sourceCommunityId: 'c1' });
+        await db
+            .insert(communitySubscription)
+            .values({ subscriberCommunityId: 'c2', sourceCommunityId: 'c1', status: 'approved' });
         expect((await run(B)).punishments).toHaveLength(1);
+    });
+
+    it('ignores pending subscriptions', async () => {
+        await run(A, [ban(A)]);
+        await db.insert(communitySubscription).values({ subscriberCommunityId: 'c2', sourceCommunityId: 'c1' });
+        expect((await run(B)).punishments).toEqual([]);
     });
 
     it('propagates REMOVE only to servers that received the ADD', async () => {

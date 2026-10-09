@@ -1,0 +1,266 @@
+---
+import Layout from "../../../layouts/Layout.astro";
+import { runAction, runtime } from "../../../runtime";
+import { listCommunities } from "../../../services/dashboard";
+import {
+    cancelInvite,
+    inviteMember,
+    listCommunityInvites,
+    listJoinRequests,
+    listMembers,
+    listSubscriptionRequests,
+    removeMember,
+    respondJoinRequest,
+    respondSubscription,
+    setRole,
+} from "../../../services/membership";
+
+const user = Astro.locals.user!;
+const communityId = Astro.params.id!;
+
+const mine = await runtime.runPromise(listCommunities(user.id));
+const current = mine.find((c) => c.id === communityId);
+if (!current) return Astro.redirect("/dashboard/communities");
+const isAdmin = current.role !== "member";
+
+let error: string | null = null;
+
+if (Astro.request.method === "POST") {
+    const form = await Astro.request.formData();
+    const target = String(form.get("userId") ?? "");
+    const login = String(form.get("githubLogin") ?? "");
+    const role = form.get("role") === "admin" ? "admin" : "member";
+    switch (form.get("intent")) {
+        case "invite":
+            error = await runAction(
+                inviteMember(user.id, communityId, login, role),
+            );
+            break;
+        case "cancel-invite":
+            error = await runAction(cancelInvite(user.id, communityId, login));
+            break;
+        case "set-role":
+            error = await runAction(
+                setRole(user.id, communityId, target, role),
+            );
+            break;
+        case "remove":
+            error = await runAction(removeMember(user.id, communityId, target));
+            break;
+        case "approve-request":
+        case "deny-request":
+            error = await runAction(
+                respondJoinRequest(
+                    user.id,
+                    communityId,
+                    target,
+                    form.get("intent") === "approve-request",
+                ),
+            );
+            break;
+        case "approve-sub":
+        case "deny-sub":
+            error = await runAction(
+                respondSubscription(
+                    user.id,
+                    communityId,
+                    String(form.get("subscriber") ?? ""),
+                    form.get("intent") === "approve-sub",
+                ),
+            );
+            break;
+    }
+    if (!error) return Astro.redirect(Astro.url.pathname);
+}
+
+const [members, invites, requests, subs] = await Promise.all([
+    runtime.runPromise(listMembers(user.id, communityId)),
+    isAdmin
+        ? runtime.runPromise(listCommunityInvites(user.id, communityId))
+        : [],
+    isAdmin ? runtime.runPromise(listJoinRequests(user.id, communityId)) : [],
+    isAdmin
+        ? runtime.runPromise(listSubscriptionRequests(user.id, communityId))
+        : [],
+]);
+const isOwner = current.role === "owner";
+---
+
+<Layout title={current.name}>
+    <h1 class="mb-1 text-2xl font-bold">{current.name}</h1>
+    <p class="mb-4 text-sm text-slate-400">
+        ID: {communityId} · You are {current.role}
+    </p>
+    {error && <p class="mb-4 rounded bg-red-900 p-2">{error}</p>}
+
+    <h2 class="mb-2 font-semibold">Members</h2>
+    <table class="mb-8 w-full text-left text-sm">
+        <tbody>
+            {
+                members.map((m) => (
+                    <tr class="border-t border-slate-800">
+                        <td class="py-2">{m.name}</td>
+                        <td>{m.role}</td>
+                        <td class="flex gap-3 py-2">
+                            {isOwner && m.role !== "owner" && (
+                                <form method="post" class="flex gap-2">
+                                    <input
+                                        type="hidden"
+                                        name="intent"
+                                        value="set-role"
+                                    />
+                                    <input
+                                        type="hidden"
+                                        name="userId"
+                                        value={m.userId}
+                                    />
+                                    <select
+                                        name="role"
+                                        class="rounded bg-slate-800 p-1"
+                                    >
+                                        <option
+                                            value="member"
+                                            selected={m.role === "member"}
+                                        >
+                                            member
+                                        </option>
+                                        <option
+                                            value="admin"
+                                            selected={m.role === "admin"}
+                                        >
+                                            admin
+                                        </option>
+                                    </select>
+                                    <button>Set role</button>
+                                </form>
+                            )}
+                            {m.role !== "owner" &&
+                                (m.userId === user.id || isAdmin) && (
+                                    <form method="post">
+                                        <input
+                                            type="hidden"
+                                            name="intent"
+                                            value="remove"
+                                        />
+                                        <input
+                                            type="hidden"
+                                            name="userId"
+                                            value={m.userId}
+                                        />
+                                        <button class="text-red-400">
+                                            {m.userId === user.id
+                                                ? "Leave"
+                                                : "Remove"}
+                                        </button>
+                                    </form>
+                                )}
+                        </td>
+                    </tr>
+                ))
+            }
+        </tbody>
+    </table>
+
+    {
+        isAdmin && (
+            <>
+                <h2 class="mb-2 font-semibold">Invite</h2>
+                <form method="post" class="mb-4 flex gap-2">
+                    <input type="hidden" name="intent" value="invite" />
+                    <input
+                        name="githubLogin"
+                        placeholder="GitHub username"
+                        required
+                        class="rounded bg-slate-800 p-2"
+                    />
+                    <select name="role" class="rounded bg-slate-800 p-2">
+                        <option value="member">member</option>
+                        {isOwner && <option value="admin">admin</option>}
+                    </select>
+                    <button class="rounded bg-slate-100 px-4 py-2 text-slate-900">
+                        Invite
+                    </button>
+                </form>
+                {invites.map((i) => (
+                    <form method="post" class="mb-1 flex gap-3 text-sm">
+                        <input
+                            type="hidden"
+                            name="intent"
+                            value="cancel-invite"
+                        />
+                        <input
+                            type="hidden"
+                            name="githubLogin"
+                            value={i.githubLogin}
+                        />
+                        <span>
+                            {i.githubLogin} ({i.role})
+                        </span>
+                        <button class="text-red-400">Cancel</button>
+                    </form>
+                ))}
+
+                <h2 class="mb-2 mt-8 font-semibold">Join requests</h2>
+                {requests.length === 0 && (
+                    <p class="text-sm text-slate-400">None</p>
+                )}
+                {requests.map((r) => (
+                    <form method="post" class="mb-1 flex gap-3 text-sm">
+                        <input type="hidden" name="userId" value={r.userId} />
+                        <span>{r.name}</span>
+                        <button
+                            name="intent"
+                            value="approve-request"
+                            class="text-green-400"
+                        >
+                            Approve
+                        </button>
+                        <button
+                            name="intent"
+                            value="deny-request"
+                            class="text-red-400"
+                        >
+                            Deny
+                        </button>
+                    </form>
+                ))}
+
+                <h2 class="mb-2 mt-8 font-semibold">Subscription requests</h2>
+                <p class="mb-2 text-sm text-slate-400">
+                    Approved communities receive this community's punishments.
+                </p>
+                {subs.length === 0 && (
+                    <p class="text-sm text-slate-400">None</p>
+                )}
+                {subs.map((s) => (
+                    <form method="post" class="mb-1 flex gap-3 text-sm">
+                        <input
+                            type="hidden"
+                            name="subscriber"
+                            value={s.subscriberId}
+                        />
+                        <span>
+                            {s.subscriberName} ({s.status})
+                        </span>
+                        {s.status === "pending" && (
+                            <button
+                                name="intent"
+                                value="approve-sub"
+                                class="text-green-400"
+                            >
+                                Approve
+                            </button>
+                        )}
+                        <button
+                            name="intent"
+                            value="deny-sub"
+                            class="text-red-400"
+                        >
+                            {s.status === "pending" ? "Deny" : "Revoke"}
+                        </button>
+                    </form>
+                ))}
+            </>
+        )
+    }
+</Layout>

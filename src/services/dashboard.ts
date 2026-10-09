@@ -1,32 +1,7 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
-import { Effect } from 'effect';
-import type { Database } from '../db/client';
 import { maskIp } from '../domain/mask';
 import { community, communityMember, communitySubscription, punishment, server } from '../db/schema';
-import { Db } from './db';
-import { DatabaseError, Forbidden } from './errors';
-
-const query = <A>(f: (db: Database) => Promise<A>) =>
-    Effect.gen(function* () {
-        const db = yield* Db;
-        return yield* Effect.tryPromise({
-            try: () => f(db),
-            catch: (cause) => (cause instanceof Forbidden ? cause : new DatabaseError({ cause })),
-        });
-    });
-
-const adminCommunityIds = async (db: Database, userId: string) =>
-    (
-        await db
-            .select({ id: communityMember.communityId })
-            .from(communityMember)
-            .where(and(eq(communityMember.userId, userId), inArray(communityMember.role, ['owner', 'admin'])))
-    ).map((r) => r.id);
-
-const requireAdmin = (db: Database, userId: string, communityId: string) =>
-    adminCommunityIds(db, userId).then((ids) => {
-        if (!ids.includes(communityId)) throw new Forbidden({ message: 'You do not manage that community' });
-    });
+import { query, requireRole } from './access';
 
 export const listServers = (userId: string) =>
     query((db) =>
@@ -45,7 +20,7 @@ export const listServers = (userId: string) =>
 
 export const registerServer = (userId: string, uuid: string, name: string, communityId: string | null) =>
     query(async (db) => {
-        if (communityId) await requireAdmin(db, userId, communityId);
+        if (communityId) await requireRole(db, userId, communityId, 'member');
         // Same message whether claimed or not, so UUIDs cannot be probed.
         await db
             .insert(server)
@@ -55,7 +30,7 @@ export const registerServer = (userId: string, uuid: string, name: string, commu
 
 export const assignServer = (userId: string, uuid: string, communityId: string) =>
     query(async (db) => {
-        await requireAdmin(db, userId, communityId);
+        await requireRole(db, userId, communityId, 'member');
         await db.update(server).set({ communityId }).where(and(eq(server.uuid, uuid), eq(server.ownerUserId, userId)));
     });
 
@@ -72,7 +47,9 @@ export const listCommunities = (userId: string) =>
             : [];
         return mine.map((c) => ({
             ...c,
-            subscriptions: subs.filter((s) => s.subscriberCommunityId === c.id).map((s) => s.sourceCommunityId),
+            subscriptions: subs
+                .filter((s) => s.subscriberCommunityId === c.id)
+                .map((s) => ({ id: s.sourceCommunityId, status: s.status })),
         }));
     });
 
@@ -85,8 +62,11 @@ export const createCommunity = (userId: string, name: string) =>
 
 export const subscribe = (userId: string, subscriberCommunityId: string, sourceCommunityId: string) =>
     query(async (db) => {
-        await requireAdmin(db, userId, subscriberCommunityId);
+        await requireRole(db, userId, subscriberCommunityId, 'admin');
         if (subscriberCommunityId === sourceCommunityId) return;
+        // Unknown ids are a silent no-op so community ids cannot be probed.
+        const [source] = await db.select({ id: community.id }).from(community).where(eq(community.id, sourceCommunityId));
+        if (!source) return;
         await db.insert(communitySubscription).values({ subscriberCommunityId, sourceCommunityId }).onConflictDoNothing();
     });
 
@@ -113,6 +93,6 @@ export const revokePunishment = (userId: string, punishmentId: string) =>
     query(async (db) => {
         const [row] = await db.select({ communityId: punishment.communityId }).from(punishment).where(eq(punishment.id, punishmentId));
         if (!row) return;
-        await requireAdmin(db, userId, row.communityId);
+        await requireRole(db, userId, row.communityId, 'admin');
         await db.update(punishment).set({ revokedAt: new Date() }).where(eq(punishment.id, punishmentId));
     });

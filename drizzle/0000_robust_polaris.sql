@@ -23,6 +23,26 @@ CREATE TABLE `community` (
 	FOREIGN KEY (`owner_user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
+CREATE TABLE `community_invite` (
+	`community_id` text NOT NULL,
+	`github_login` text NOT NULL,
+	`role` text NOT NULL,
+	`invited_by_user_id` text NOT NULL,
+	`created_at` integer NOT NULL,
+	PRIMARY KEY(`community_id`, `github_login`),
+	FOREIGN KEY (`community_id`) REFERENCES `community`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`invited_by_user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE TABLE `community_join_request` (
+	`community_id` text NOT NULL,
+	`user_id` text NOT NULL,
+	`created_at` integer NOT NULL,
+	PRIMARY KEY(`community_id`, `user_id`),
+	FOREIGN KEY (`community_id`) REFERENCES `community`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
 CREATE TABLE `community_member` (
 	`community_id` text NOT NULL,
 	`user_id` text NOT NULL,
@@ -35,6 +55,8 @@ CREATE TABLE `community_member` (
 CREATE TABLE `community_subscription` (
 	`subscriber_community_id` text NOT NULL,
 	`source_community_id` text NOT NULL,
+	`status` text DEFAULT 'pending' NOT NULL,
+	`created_at` integer NOT NULL,
 	PRIMARY KEY(`subscriber_community_id`, `source_community_id`),
 	FOREIGN KEY (`subscriber_community_id`) REFERENCES `community`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`source_community_id`) REFERENCES `community`(`id`) ON UPDATE no action ON DELETE cascade
@@ -103,11 +125,13 @@ CREATE TABLE `user` (
 	`email` text NOT NULL,
 	`email_verified` integer DEFAULT false NOT NULL,
 	`image` text,
+	`github_login` text,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `user_email_unique` ON `user` (`email`);--> statement-breakpoint
+CREATE UNIQUE INDEX `user_github_login_unique` ON `user` (`github_login`);--> statement-breakpoint
 CREATE TABLE `verification` (
 	`id` text PRIMARY KEY NOT NULL,
 	`identifier` text NOT NULL,

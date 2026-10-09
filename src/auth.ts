@@ -8,10 +8,17 @@ export const auth = betterAuth({
         provider: 'sqlite',
         schema,
     }),
+    user: {
+        additionalFields: { githubLogin: { type: 'string', required: false, input: false } },
+    },
     socialProviders: {
         github: {
             clientId: process.env.GITHUB_CLIENT_ID ?? '',
             clientSecret: process.env.GITHUB_CLIENT_SECRET ?? '',
+            overrideUserInfoOnSignIn: true,
+            mapProfileToUser: (profile) => ({ githubLogin: profile.login.toLowerCase() }),
         },
     },
 });
+
+export type Auth = typeof auth;

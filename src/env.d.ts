@@ -1,5 +1,5 @@
 declare namespace App {
     interface Locals {
-        user: import('better-auth').User | null;
+        user: import('./auth').Auth['$Infer']['Session']['user'] | null;
     }
 }
