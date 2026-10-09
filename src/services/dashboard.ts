@@ -1,0 +1,118 @@
+import { and, desc, eq, inArray } from 'drizzle-orm';
+import { Effect } from 'effect';
+import type { Database } from '../db/client';
+import { maskIp } from '../domain/mask';
+import { community, communityMember, communitySubscription, punishment, server } from '../db/schema';
+import { Db } from './db';
+import { DatabaseError, Forbidden } from './errors';
+
+const query = <A>(f: (db: Database) => Promise<A>) =>
+    Effect.gen(function* () {
+        const db = yield* Db;
+        return yield* Effect.tryPromise({
+            try: () => f(db),
+            catch: (cause) => (cause instanceof Forbidden ? cause : new DatabaseError({ cause })),
+        });
+    });
+
+const adminCommunityIds = async (db: Database, userId: string) =>
+    (
+        await db
+            .select({ id: communityMember.communityId })
+            .from(communityMember)
+            .where(and(eq(communityMember.userId, userId), inArray(communityMember.role, ['owner', 'admin'])))
+    ).map((r) => r.id);
+
+const requireAdmin = (db: Database, userId: string, communityId: string) =>
+    adminCommunityIds(db, userId).then((ids) => {
+        if (!ids.includes(communityId)) throw new Forbidden({ message: 'You do not manage that community' });
+    });
+
+export const listServers = (userId: string) =>
+    query((db) =>
+        db
+            .select({
+                uuid: server.uuid,
+                name: server.name,
+                lastSeenAt: server.lastSeenAt,
+                communityId: server.communityId,
+                communityName: community.name,
+            })
+            .from(server)
+            .leftJoin(community, eq(community.id, server.communityId))
+            .where(eq(server.ownerUserId, userId)),
+    );
+
+export const registerServer = (userId: string, uuid: string, name: string, communityId: string | null) =>
+    query(async (db) => {
+        if (communityId) await requireAdmin(db, userId, communityId);
+        // Same message whether claimed or not, so UUIDs cannot be probed.
+        await db
+            .insert(server)
+            .values({ uuid, publicId: crypto.randomUUID(), name, ownerUserId: userId, communityId, createdAt: new Date() })
+            .onConflictDoNothing();
+    });
+
+export const assignServer = (userId: string, uuid: string, communityId: string) =>
+    query(async (db) => {
+        await requireAdmin(db, userId, communityId);
+        await db.update(server).set({ communityId }).where(and(eq(server.uuid, uuid), eq(server.ownerUserId, userId)));
+    });
+
+export const listCommunities = (userId: string) =>
+    query(async (db) => {
+        const mine = await db
+            .select({ id: community.id, name: community.name, role: communityMember.role })
+            .from(communityMember)
+            .innerJoin(community, eq(community.id, communityMember.communityId))
+            .where(eq(communityMember.userId, userId));
+        const ids = mine.map((c) => c.id);
+        const subs = ids.length
+            ? await db.select().from(communitySubscription).where(inArray(communitySubscription.subscriberCommunityId, ids))
+            : [];
+        return mine.map((c) => ({
+            ...c,
+            subscriptions: subs.filter((s) => s.subscriberCommunityId === c.id).map((s) => s.sourceCommunityId),
+        }));
+    });
+
+export const createCommunity = (userId: string, name: string) =>
+    query(async (db) => {
+        const id = crypto.randomUUID();
+        await db.insert(community).values({ id, name, ownerUserId: userId, createdAt: new Date() });
+        await db.insert(communityMember).values({ communityId: id, userId, role: 'owner' });
+    });
+
+export const subscribe = (userId: string, subscriberCommunityId: string, sourceCommunityId: string) =>
+    query(async (db) => {
+        await requireAdmin(db, userId, subscriberCommunityId);
+        if (subscriberCommunityId === sourceCommunityId) return;
+        await db.insert(communitySubscription).values({ subscriberCommunityId, sourceCommunityId }).onConflictDoNothing();
+    });
+
+export const listPunishments = (userId: string) =>
+    query(async (db) => {
+        const ids = (await db.select({ id: communityMember.communityId }).from(communityMember).where(eq(communityMember.userId, userId))).map((r) => r.id);
+        if (ids.length === 0) return [];
+        const rows = await db
+            .select({ p: punishment, serverName: server.name, communityName: community.name })
+            .from(punishment)
+            .innerJoin(server, eq(server.uuid, punishment.originServerUuid))
+            .innerJoin(community, eq(community.id, punishment.communityId))
+            .where(inArray(punishment.communityId, ids))
+            .orderBy(desc(punishment.createdAt))
+            .limit(200);
+        // Drop the secret server uuid before anything reaches a template.
+        return rows.map(({ p, serverName, communityName }) => {
+            const { originServerUuid: _omit, ...safe } = p;
+            return { ...safe, playerIp: maskIp(safe.playerIp), serverName, communityName };
+        });
+    });
+
+export const revokePunishment = (userId: string, punishmentId: string) =>
+    query(async (db) => {
+        const [row] = await db.select({ communityId: punishment.communityId }).from(punishment).where(eq(punishment.id, punishmentId));
+        if (!row) return;
+        await requireAdmin(db, userId, row.communityId);
+        await db.update(punishment).set({ revokedAt: new Date() }).where(eq(punishment.id, punishmentId));
+    });

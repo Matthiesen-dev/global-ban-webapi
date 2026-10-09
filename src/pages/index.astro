@@ -1,16 +1,27 @@
 ---
+import Layout from "../layouts/Layout.astro";
+
+if (Astro.locals.user) return Astro.redirect("/dashboard/servers");
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
-</html>
+<Layout title="Sign in">
+	<h1 class="mb-2 text-3xl font-bold">Global Ban</h1>
+	<p class="mb-6 text-slate-400">
+		Manage servers, communities and shared punishments.
+	</p>
+	<button
+		id="login"
+		class="rounded bg-slate-100 px-4 py-2 font-medium text-slate-900"
+		>Sign in with GitHub</button
+	>
+	<script>
+		import { createAuthClient } from "better-auth/client";
+		const client = createAuthClient();
+		document.getElementById("login")?.addEventListener("click", () => {
+			client.signIn.social({
+				provider: "github",
+				callbackURL: "/dashboard/servers",
+			});
+		});
+	</script>
+</Layout>

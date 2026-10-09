@@ -1,0 +1,118 @@
+---
+import { Schema } from "effect";
+import Layout from "../../layouts/Layout.astro";
+import { Uuid } from "../../domain/punishment";
+import { runAction, runtime } from "../../runtime";
+import {
+    assignServer,
+    listCommunities,
+    listServers,
+    registerServer,
+} from "../../services/dashboard";
+
+const user = Astro.locals.user!;
+let error: string | null = null;
+
+if (Astro.request.method === "POST") {
+    const form = await Astro.request.formData();
+    const uuid = String(form.get("uuid") ?? "")
+        .trim()
+        .toLowerCase();
+    const communityId = String(form.get("communityId") ?? "") || null;
+    if (form.get("intent") === "assign" && communityId) {
+        error = await runAction(assignServer(user.id, uuid, communityId));
+    } else if (!Schema.is(Uuid)(uuid)) {
+        error = "Enter the server UUID from the mod config.";
+    } else {
+        error = await runAction(
+            registerServer(
+                user.id,
+                uuid,
+                String(form.get("name") ?? "").trim() || "Server",
+                communityId,
+            ),
+        );
+    }
+    if (!error) return Astro.redirect(Astro.url.pathname);
+}
+
+const [servers, communities] = await Promise.all([
+    runtime.runPromise(listServers(user.id)),
+    runtime.runPromise(listCommunities(user.id)),
+]);
+const fmt = (d: Date | null) => (d ? d.toLocaleString() : "never");
+---
+
+<Layout title="Servers">
+    <h1 class="mb-4 text-2xl font-bold">Servers</h1>
+    {error && <p class="mb-4 rounded bg-red-900 p-2">{error}</p>}
+
+    <form method="post" class="mb-8 flex flex-wrap gap-2">
+        <input
+            name="uuid"
+            placeholder="Server UUID"
+            required
+            class="w-96 rounded bg-slate-800 p-2"
+        />
+        <input
+            name="name"
+            placeholder="Name"
+            class="rounded bg-slate-800 p-2"
+        />
+        <select name="communityId" class="rounded bg-slate-800 p-2">
+            <option value="">No community</option>
+            {communities.map((c) => <option value={c.id}>{c.name}</option>)}
+        </select>
+        <button class="rounded bg-slate-100 px-4 py-2 text-slate-900"
+            >Register</button
+        >
+    </form>
+
+    <table class="w-full text-left">
+        <thead class="text-slate-400"
+            ><tr><th>Name</th><th>Community</th><th>Last sync</th><th></th></tr
+            ></thead
+        >
+        <tbody>
+            {
+                servers.map((s) => (
+                    <tr class="border-t border-slate-800">
+                        <td class="py-2">{s.name}</td>
+                        <td>{s.communityName ?? "Unassigned"}</td>
+                        <td>{fmt(s.lastSeenAt)}</td>
+                        <td>
+                            <form method="post" class="flex gap-2">
+                                <input
+                                    type="hidden"
+                                    name="intent"
+                                    value="assign"
+                                />
+                                <input
+                                    type="hidden"
+                                    name="uuid"
+                                    value={s.uuid}
+                                />
+                                <select
+                                    name="communityId"
+                                    class="rounded bg-slate-800 p-1"
+                                >
+                                    {communities.map((c) => (
+                                        <option
+                                            value={c.id}
+                                            selected={c.id === s.communityId}
+                                        >
+                                            {c.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                <button class="text-slate-300 hover:text-white">
+                                    Move
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                ))
+            }
+        </tbody>
+    </table>
+</Layout>

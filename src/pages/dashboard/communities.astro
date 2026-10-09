@@ -1,0 +1,81 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { runAction, runtime } from "../../runtime";
+import {
+    createCommunity,
+    listCommunities,
+    subscribe,
+} from "../../services/dashboard";
+
+const user = Astro.locals.user!;
+let error: string | null = null;
+
+if (Astro.request.method === "POST") {
+    const form = await Astro.request.formData();
+    if (form.get("intent") === "subscribe") {
+        error = await runAction(
+            subscribe(
+                user.id,
+                String(form.get("subscriber")),
+                String(form.get("source")).trim(),
+            ),
+        );
+    } else {
+        const name = String(form.get("name") ?? "").trim();
+        if (name) error = await runAction(createCommunity(user.id, name));
+    }
+    if (!error) return Astro.redirect(Astro.url.pathname);
+}
+
+const communities = await runtime.runPromise(listCommunities(user.id));
+---
+
+<Layout title="Communities">
+    <h1 class="mb-4 text-2xl font-bold">Communities</h1>
+    {error && <p class="mb-4 rounded bg-red-900 p-2">{error}</p>}
+
+    <form method="post" class="mb-8 flex gap-2">
+        <input
+            name="name"
+            placeholder="New community name"
+            required
+            class="rounded bg-slate-800 p-2"
+        />
+        <button class="rounded bg-slate-100 px-4 py-2 text-slate-900"
+            >Create</button
+        >
+    </form>
+
+    {
+        communities.map((c) => (
+            <section class="mb-6 rounded border border-slate-800 p-4">
+                <h2 class="font-semibold">
+                    {c.name}{" "}
+                    <span class="text-sm text-slate-400">({c.role})</span>
+                </h2>
+                <p class="text-sm text-slate-400">ID: {c.id}</p>
+                <p class="mt-2 text-sm">
+                    Subscribed to:{" "}
+                    {c.subscriptions.length
+                        ? c.subscriptions.join(", ")
+                        : "none"}
+                </p>
+                {c.role !== "member" && (
+                    <form method="post" class="mt-2 flex gap-2">
+                        <input type="hidden" name="intent" value="subscribe" />
+                        <input type="hidden" name="subscriber" value={c.id} />
+                        <input
+                            name="source"
+                            placeholder="Community ID to subscribe to"
+                            required
+                            class="w-96 rounded bg-slate-800 p-2"
+                        />
+                        <button class="text-slate-300 hover:text-white">
+                            Subscribe
+                        </button>
+                    </form>
+                )}
+            </section>
+        ))
+    }
+</Layout>

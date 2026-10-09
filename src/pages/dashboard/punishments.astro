@@ -1,0 +1,60 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { runAction, runtime } from "../../runtime";
+import { listPunishments, revokePunishment } from "../../services/dashboard";
+
+const user = Astro.locals.user!;
+let error: string | null = null;
+
+if (Astro.request.method === "POST") {
+    const form = await Astro.request.formData();
+    error = await runAction(revokePunishment(user.id, String(form.get("id"))));
+    if (!error) return Astro.redirect(Astro.url.pathname);
+}
+
+const punishments = await runtime.runPromise(listPunishments(user.id));
+---
+
+<Layout title="Punishments">
+    <h1 class="mb-4 text-2xl font-bold">Punishments</h1>
+    {error && <p class="mb-4 rounded bg-red-900 p-2">{error}</p>}
+    <table class="w-full text-left text-sm">
+        <thead class="text-slate-400">
+            <tr
+                ><th>Player</th><th>Type</th><th>IP</th><th>Reason</th><th
+                    >Server</th
+                ><th>Community</th><th></th></tr
+            >
+        </thead>
+        <tbody>
+            {
+                punishments.map((p) => (
+                    <tr class="border-t border-slate-800">
+                        <td class="py-2">{p.playerDisplayName}</td>
+                        <td>{p.type}</td>
+                        <td>{p.playerIp}</td>
+                        <td>{p.reason}</td>
+                        <td>{p.serverName}</td>
+                        <td>{p.communityName}</td>
+                        <td>
+                            {p.revokedAt ? (
+                                <span class="text-slate-500">Revoked</span>
+                            ) : (
+                                <form method="post">
+                                    <input
+                                        type="hidden"
+                                        name="id"
+                                        value={p.id}
+                                    />
+                                    <button class="text-red-400 hover:text-red-300">
+                                        Revoke
+                                    </button>
+                                </form>
+                            )}
+                        </td>
+                    </tr>
+                ))
+            }
+        </tbody>
+    </table>
+</Layout>

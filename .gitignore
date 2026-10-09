@@ -25,3 +25,7 @@ pnpm-debug.log*
 
 # local symlinks
 .external/
+
+# local database
+*.db
+*.db-*
