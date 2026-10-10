@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "280c1e78-ad6f-4e96-ac18-79497f4cfd3e",
+  "id": "b13bd01a-3734-463c-b19b-38ee62c9964b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -457,6 +457,86 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "ownership_transfer": {
+      "name": "ownership_transfer",
+      "columns": {
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "resource_id": {
+          "name": "resource_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "from_user_id": {
+          "name": "from_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "to_user_id": {
+          "name": "to_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ownership_transfer_from_user_id_user_id_fk": {
+          "name": "ownership_transfer_from_user_id_user_id_fk",
+          "tableFrom": "ownership_transfer",
+          "tableTo": "user",
+          "columnsFrom": [
+            "from_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "ownership_transfer_to_user_id_user_id_fk": {
+          "name": "ownership_transfer_to_user_id_user_id_fk",
+          "tableFrom": "ownership_transfer",
+          "tableTo": "user",
+          "columnsFrom": [
+            "to_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "ownership_transfer_kind_resource_id_pk": {
+          "columns": [
+            "kind",
+            "resource_id"
+          ],
+          "name": "ownership_transfer_kind_resource_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "punishment": {
       "name": "punishment",
       "columns": {
@@ -478,7 +558,7 @@
           "name": "origin_server_uuid",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "type": {
@@ -602,7 +682,7 @@
           "columnsTo": [
             "uuid"
           ],
-          "onDelete": "cascade",
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
