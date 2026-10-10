@@ -1,9 +1,13 @@
-import { Effect, ManagedRuntime } from 'effect';
+import { Effect, Layer, ManagedRuntime } from 'effect';
 import { DbLive, type Db } from './services/db';
 import type { DatabaseError, Forbidden } from './services/errors';
+import { RateLimiterLive } from './services/rateLimit';
 
 export const runtime = ManagedRuntime.make(
-    DbLive(process.env.DATABASE_URL ?? 'file:local.db', process.env.DATABASE_AUTH_TOKEN),
+    Layer.mergeAll(
+        DbLive(process.env.DATABASE_URL ?? 'file:local.db', process.env.DATABASE_AUTH_TOKEN),
+        RateLimiterLive,
+    ),
 );
 
 /** Runs a dashboard mutation and returns a user-facing error message, or null on success. */

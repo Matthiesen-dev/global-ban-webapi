@@ -24,6 +24,8 @@ astro dev
 | `BETTER_AUTH_SECRET` | Long random secret used to sign sessions |
 | `BETTER_AUTH_URL` | Public base URL of this app |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | GitHub OAuth app credentials. Set the callback URL to `<BETTER_AUTH_URL>/api/auth/callback/github` |
+| `TRUSTED_PROXY` | `none` (default), `traefik` or `cloudflare`. Selects which header carries the client IP for rate limiting |
+| `TRUSTED_PROXY_HOPS` | Number of trusted proxies that append to `X-Forwarded-For` (default `1`, used by `traefik`) |
 
 ### Scripts
 
@@ -83,6 +85,7 @@ The body and the response use the same shape, matching the mod's `SyncData` reco
 | `200` | Success (the mod clears its pending queue on this) |
 | `400` | Missing or invalid header, malformed JSON or body, or body over 1 MB |
 | `403` | Server not registered, or not assigned to a community |
+| `429` | Rate limited; the `Retry-After` header gives the seconds to wait |
 | `500` | Database error |
 
 ```sh
@@ -91,6 +94,24 @@ curl -X POST http://localhost:4321/api/v1/sync \
   -H 'X-Global-Ban-UUID: 11111111-1111-4111-8111-111111111111' \
   -d '{"punishments":[]}'
 ```
+
+### Rate limiting
+
+Two in-memory token buckets guard the endpoint ([src/services/rateLimit.ts](src/services/rateLimit.ts)):
+
+- **Per client IP**, checked before any parsing or database access: burst of 120, refilling 2 per second.
+- **Per server UUID**: burst of 10, refilling 1 every 10 seconds. This also applies to unregistered UUIDs.
+
+Both are far above the mod's minimum one-minute sync interval. State is per process, so it resets on restart and is not shared between multiple instances. IPv6 clients are limited per /64.
+
+#### Reverse proxies
+
+By default the limiter uses the connection's address, which behind a proxy is the proxy itself. Set `TRUSTED_PROXY` so the real client IP is used instead:
+
+- `cloudflare`: reads `CF-Connecting-IP`, which Cloudflare sets itself, including for Tunnel and Access traffic. This also works for Cloudflare Tunnel in front of Traefik, since the header passes through.
+- `traefik`: reads `X-Forwarded-For` counted from the right, so values a client adds are ignored. Set `TRUSTED_PROXY_HOPS` if more than one trusted proxy appends to it.
+
+If the expected header is missing or not a valid IP, the connection address is used. These headers can be forged by anyone who reaches the app directly, so only enable a mode when the app is reachable solely through that proxy: keep it off published host ports, and use a Tunnel or firewall rules.
 
 ## Dashboard
 
