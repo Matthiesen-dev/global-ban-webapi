@@ -12,10 +12,8 @@ Requires Node 22.12+ and pnpm.
 pnpm install
 cp .env.example .env   # then fill in the values below
 pnpm db:migrate
-astro dev --background
+astro dev
 ```
-
-Manage the dev server with `astro dev status`, `astro dev logs` and `astro dev stop`.
 
 ### Environment
 
