@@ -6,11 +6,12 @@ import { resolveClientIp, proxyConfigFromEnv } from '../../../services/clientIp'
 import { InvalidPayload } from '../../../services/errors';
 import { RateLimiter } from '../../../services/rateLimit';
 import { sync } from '../../../services/sync';
+import { getSecret } from 'astro:env/server';
 
 export const prerender = false;
 
 const MAX_BODY_BYTES = 1_000_000;
-const proxyConfig = proxyConfigFromEnv(process.env);
+const proxyConfig = proxyConfigFromEnv(getSecret);
 
 const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });

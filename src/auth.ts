@@ -2,9 +2,10 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { makeDatabase } from './db/client';
 import * as schema from './db/schema';
+import { DATABASE_URL, DATABASE_AUTH_TOKEN, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET } from 'astro:env/server';
 
 export const auth = betterAuth({
-    database: drizzleAdapter(makeDatabase(process.env.DATABASE_URL ?? 'file:local.db', process.env.DATABASE_AUTH_TOKEN), {
+    database: drizzleAdapter(makeDatabase(DATABASE_URL ?? 'file:local.db', DATABASE_AUTH_TOKEN), {
         provider: 'sqlite',
         schema,
     }),
@@ -13,8 +14,8 @@ export const auth = betterAuth({
     },
     socialProviders: {
         github: {
-            clientId: process.env.GITHUB_CLIENT_ID ?? '',
-            clientSecret: process.env.GITHUB_CLIENT_SECRET ?? '',
+            clientId: GITHUB_CLIENT_ID ?? '',
+            clientSecret: GITHUB_CLIENT_SECRET ?? '',
             overrideUserInfoOnSignIn: true,
             mapProfileToUser: (profile) => ({ githubLogin: profile.login.toLowerCase() }),
         },

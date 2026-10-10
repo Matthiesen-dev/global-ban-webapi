@@ -8,12 +8,12 @@ export interface ProxyConfig {
     readonly hops: number;
 }
 
-export const proxyConfigFromEnv = (env: Record<string, string | undefined>): ProxyConfig => {
-    const mode = (env.TRUSTED_PROXY ?? 'none').trim().toLowerCase();
+export const proxyConfigFromEnv = (getSecret: typeof import("astro:env/server")['getSecret']): ProxyConfig => {
+    const mode = (getSecret('TRUSTED_PROXY') ?? 'none').trim().toLowerCase();
     if (mode !== 'none' && mode !== 'traefik' && mode !== 'cloudflare') {
         throw new Error(`TRUSTED_PROXY must be one of none, traefik, cloudflare (got "${mode}")`);
     }
-    const hops = Number(env.TRUSTED_PROXY_HOPS ?? 1);
+    const hops = Number(getSecret('TRUSTED_PROXY_HOPS') ?? 1);
     if (!Number.isInteger(hops) || hops < 1) throw new Error('TRUSTED_PROXY_HOPS must be a positive integer');
     return { mode, hops };
 };

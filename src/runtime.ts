@@ -3,10 +3,11 @@ import { proxyConfigFromEnv, resolveClientIp } from './services/clientIp';
 import { DbLive, type Db } from './services/db';
 import type { DatabaseError, Forbidden } from './services/errors';
 import { RateLimiterLive, type RateLimited, type RateLimiter } from './services/rateLimit';
+import { DATABASE_URL, DATABASE_AUTH_TOKEN, getSecret } from 'astro:env/server';
 
 export const runtime = ManagedRuntime.make(
     Layer.mergeAll(
-        DbLive(process.env.DATABASE_URL ?? 'file:local.db', process.env.DATABASE_AUTH_TOKEN),
+        DbLive(DATABASE_URL ?? 'file:local.db', DATABASE_AUTH_TOKEN),
         RateLimiterLive,
     ),
 );
@@ -47,7 +48,7 @@ export const runPublic = <A>(effect: Effect.Effect<A, DatabaseError | Forbidden 
         ),
     );
 
-const proxyConfig = proxyConfigFromEnv(process.env);
+const proxyConfig = proxyConfigFromEnv(getSecret);
 
 export const clientIpOf = (request: Request, getClientAddress: () => string) => {
     let socketIp = 'unknown';
