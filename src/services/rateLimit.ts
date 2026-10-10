@@ -53,22 +53,38 @@ export const makeTokenBuckets = (config: BucketConfig, now: () => number = Date.
 // The mod's minimum sync interval is one minute, so these leave headroom for retries.
 export const IP_LIMIT: BucketConfig = { capacity: 120, refillPerSecond: 2 };
 export const SERVER_LIMIT: BucketConfig = { capacity: 10, refillPerSecond: 0.1 };
+// IP lookups are the more abusable path (probing who is banned from an address), so they get the tightest bucket.
+export const LOOKUP_NAME_LIMIT: BucketConfig = { capacity: 20, refillPerSecond: 0.2 };
+export const LOOKUP_IP_LIMIT: BucketConfig = { capacity: 5, refillPerSecond: 0.02 };
+export const APPEAL_SUBMIT_LIMIT: BucketConfig = { capacity: 5, refillPerSecond: 0.005 };
 
 export class RateLimiter extends Context.Service<
     RateLimiter,
     {
         readonly checkIp: (ip: string) => Effect.Effect<void, RateLimited>;
         readonly checkServer: (serverUuid: string) => Effect.Effect<void, RateLimited>;
+        readonly checkLookupName: (ip: string) => Effect.Effect<void, RateLimited>;
+        readonly checkLookupIp: (ip: string) => Effect.Effect<void, RateLimited>;
+        readonly checkAppealSubmit: (ip: string) => Effect.Effect<void, RateLimited>;
     }
 >()('RateLimiter') { }
 
 export const RateLimiterLive = Layer.sync(RateLimiter, () => {
     const ip = makeTokenBuckets(IP_LIMIT);
     const servers = makeTokenBuckets(SERVER_LIMIT);
+    const lookupName = makeTokenBuckets(LOOKUP_NAME_LIMIT);
+    const lookupIp = makeTokenBuckets(LOOKUP_IP_LIMIT);
+    const submit = makeTokenBuckets(APPEAL_SUBMIT_LIMIT);
     const check = (buckets: ReturnType<typeof makeTokenBuckets>, key: string) =>
         Effect.suspend(() => {
             const wait = buckets.consume(key);
             return wait === 0 ? Effect.void : Effect.fail(new RateLimited({ retryAfterSeconds: wait }));
         });
-    return { checkIp: (key) => check(ip, key), checkServer: (key) => check(servers, key) };
+    return {
+        checkIp: (key) => check(ip, key),
+        checkServer: (key) => check(servers, key),
+        checkLookupName: (key) => check(lookupName, key),
+        checkLookupIp: (key) => check(lookupIp, key),
+        checkAppealSubmit: (key) => check(submit, key),
+    };
 });

@@ -1,7 +1,8 @@
 import { Effect, Layer, ManagedRuntime } from 'effect';
+import { proxyConfigFromEnv, resolveClientIp } from './services/clientIp';
 import { DbLive, type Db } from './services/db';
 import type { DatabaseError, Forbidden } from './services/errors';
-import { RateLimiterLive } from './services/rateLimit';
+import { RateLimiterLive, type RateLimited, type RateLimiter } from './services/rateLimit';
 
 export const runtime = ManagedRuntime.make(
     Layer.mergeAll(
@@ -25,3 +26,35 @@ export const runAction = (effect: Effect.Effect<unknown, DatabaseError | Forbidd
             }),
         ),
     );
+
+export type Outcome<A> = { ok: true; value: A } | { ok: false; error: string };
+
+/** Runs a public (unauthenticated) effect, turning expected failures into user-facing messages. */
+export const runPublic = <A>(effect: Effect.Effect<A, DatabaseError | Forbidden | RateLimited, Db | RateLimiter>) =>
+    runtime.runPromise(
+        effect.pipe(
+            Effect.map((value): Outcome<A> => ({ ok: true, value })),
+            Effect.catchTags({
+                Forbidden: (e) => Effect.succeed<Outcome<A>>({ ok: false, error: e.message }),
+                RateLimited: (e) =>
+                    Effect.succeed<Outcome<A>>({ ok: false, error: `Too many requests, try again in ${e.retryAfterSeconds} seconds` }),
+                DatabaseError: (e) =>
+                    Effect.sync((): Outcome<A> => {
+                        console.error('public action failed', e.cause);
+                        return { ok: false, error: 'Something went wrong' };
+                    }),
+            }),
+        ),
+    );
+
+const proxyConfig = proxyConfigFromEnv(process.env);
+
+export const clientIpOf = (request: Request, getClientAddress: () => string) => {
+    let socketIp = 'unknown';
+    try {
+        socketIp = getClientAddress();
+    } catch {
+        // Shared bucket rather than skipping limiting.
+    }
+    return resolveClientIp(proxyConfig, request.headers, socketIp);
+};

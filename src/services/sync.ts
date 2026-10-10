@@ -1,7 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { Effect } from 'effect';
 import type { Database } from '../db/client';
-import { communitySubscription, punishment, punishmentDelivery, server } from '../db/schema';
+import { communitySubscription, punishment, punishmentDelivery, punishmentOverride, server } from '../db/schema';
 import type { PunishmentSync, SyncData } from '../domain/punishment';
 import { DatabaseError, ServerNotInCommunity, ServerNotRegistered } from './errors';
 import { Db } from './db';
@@ -61,7 +61,13 @@ const ingest = async (tx: Tx, caller: string, communityId: string, visible: stri
     }
 };
 
-const outgoing = async (tx: Tx, caller: string, visible: string[], now: Date): Promise<PunishmentSync[]> => {
+const outgoing = async (
+    tx: Tx,
+    caller: string,
+    communityId: string,
+    visible: string[],
+    now: Date,
+): Promise<PunishmentSync[]> => {
     const rows = await tx
         .select({ p: punishment, originPublicId: server.publicId })
         .from(punishment)
@@ -69,6 +75,11 @@ const outgoing = async (tx: Tx, caller: string, visible: string[], now: Date): P
         .where(inArray(punishment.communityId, visible));
     const delivered = await tx.select().from(punishmentDelivery).where(eq(punishmentDelivery.serverUuid, caller));
     const has = new Set(delivered.map((d) => `${d.punishmentId}:${d.syncType}`));
+    const overrides = await tx
+        .select({ id: punishmentOverride.punishmentId })
+        .from(punishmentOverride)
+        .where(eq(punishmentOverride.communityId, communityId));
+    const overridden = new Set(overrides.map((o) => o.id));
 
     const result: PunishmentSync[] = [];
     const deliveries: (typeof punishmentDelivery.$inferInsert)[] = [];
@@ -86,10 +97,12 @@ const outgoing = async (tx: Tx, caller: string, visible: string[], now: Date): P
             serverUuid: originPublicId ?? NIL_UUID,
         };
         const hasAdd = has.has(`${p.id}:ADD`);
-        if (p.revokedAt === null && !hasAdd) {
+        // An override lifts the ban for this community only, so it behaves like a revoke here.
+        const lifted = p.revokedAt !== null || overridden.has(p.id);
+        if (!lifted && !hasAdd) {
             result.push({ record, type: 'ADD' });
             deliveries.push({ serverUuid: caller, punishmentId: p.id, syncType: 'ADD', deliveredAt: now });
-        } else if (p.revokedAt !== null && hasAdd && !has.has(`${p.id}:REMOVE`)) {
+        } else if (lifted && hasAdd && !has.has(`${p.id}:REMOVE`)) {
             result.push({ record, type: 'REMOVE' });
             deliveries.push({ serverUuid: caller, punishmentId: p.id, syncType: 'REMOVE', deliveredAt: now });
         }
@@ -125,7 +138,7 @@ export const sync = (serverUuid: string, incoming: SyncData) =>
                     const visible = [communityId, ...subs.map((s) => s.id)];
                     await tx.update(server).set({ lastSeenAt: now }).where(eq(server.uuid, serverUuid));
                     await ingest(tx, serverUuid, communityId, visible, incoming, now);
-                    return { punishments: await outgoing(tx, serverUuid, visible, now) } satisfies SyncData;
+                    return { punishments: await outgoing(tx, serverUuid, communityId, visible, now) } satisfies SyncData;
                 }),
             catch: (cause) => new DatabaseError({ cause }),
         });

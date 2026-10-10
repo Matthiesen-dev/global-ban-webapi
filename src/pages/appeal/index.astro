@@ -1,0 +1,138 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { clientIpOf, runPublic } from "../../runtime";
+import {
+    lookupLimited,
+    submitAppealLimited,
+    type AppealTarget,
+} from "../../services/appeals";
+
+const runLookup = (term: string) =>
+    runPublic(
+        lookupLimited(
+            clientIpOf(Astro.request, () => Astro.clientAddress),
+            term,
+        ),
+    );
+
+let error: string | null = null;
+let q = "";
+let results:
+    | Extract<Awaited<ReturnType<typeof runLookup>>, { ok: true }>["value"]
+    | null = null;
+let message = "";
+let contact = "";
+
+if (Astro.request.method === "POST") {
+    const form = await Astro.request.formData();
+    q = String(form.get("q") ?? "");
+    const ip = clientIpOf(Astro.request, () => Astro.clientAddress);
+
+    if (form.get("intent") === "submit") {
+        message = String(form.get("message") ?? "");
+        contact = String(form.get("contact") ?? "");
+        const targets: AppealTarget[] = form.getAll("target").flatMap((v) => {
+            const [punishmentId, communityId] = String(v).split("|");
+            return punishmentId && communityId
+                ? [{ punishmentId, communityId }]
+                : [];
+        });
+        const outcome = await runPublic(
+            submitAppealLimited(ip, targets, message, contact || null),
+        );
+        if (outcome.ok) return Astro.redirect(`/appeal/case/${outcome.value}`);
+        error = outcome.error;
+    }
+
+    // Re-run the lookup (also after a failed submit) so the form keeps its choices.
+    const outcome = await runLookup(q);
+    if (outcome.ok) results = outcome.value;
+    else error ??= outcome.error;
+}
+---
+
+<Layout title="Appeal a ban">
+    <h1 class="mb-2 text-2xl font-bold">Appeal a ban</h1>
+    <p class="mb-4 text-slate-400">
+        Look up your player name or IP address to find active bans, then appeal
+        to the communities that can lift them.
+    </p>
+
+    {error && <p class="mb-4 rounded bg-red-900 p-2">{error}</p>}
+
+    <form method="post" class="mb-6 flex gap-2">
+        <input type="hidden" name="intent" value="lookup" />
+        <input
+            name="q"
+            value={q}
+            required
+            maxlength="64"
+            placeholder="Player name or IP address"
+            class="flex-1 rounded bg-slate-800 p-2"
+        />
+        <button
+            class="rounded bg-slate-100 px-4 py-2 font-medium text-slate-900"
+            >Look up</button
+        >
+    </form>
+
+    {
+        results && results.length === 0 && (
+            <p class="text-slate-400">No active bans found.</p>
+        )
+    }
+
+    {
+        results && results.length > 0 && (
+            <form method="post" class="space-y-4">
+                <input type="hidden" name="intent" value="submit" />
+                <input type="hidden" name="q" value={q} />
+                {results.map((p) => (
+                    <fieldset class="rounded border border-slate-800 p-3">
+                        <legend class="px-1 text-sm text-slate-400">
+                            {p.type} issued by {p.communityName}
+                        </legend>
+                        <p class="mb-2">{p.reason}</p>
+                        {p.appealTo.length === 0 ? (
+                            <p class="text-sm text-slate-500">
+                                No community can currently receive an appeal for
+                                this ban.
+                            </p>
+                        ) : (
+                            p.appealTo.map((c) => (
+                                <label class="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        name="target"
+                                        value={`${p.id}|${c.id}`}
+                                    />
+                                    Appeal to {c.name}
+                                </label>
+                            ))
+                        )}
+                    </fieldset>
+                ))}
+                <textarea
+                    name="message"
+                    required
+                    maxlength="2000"
+                    rows="6"
+                    placeholder="Why should this ban be lifted?"
+                    class="w-full rounded bg-slate-800 p-2"
+                >
+                    {message}
+                </textarea>
+                <input
+                    name="contact"
+                    value={contact}
+                    maxlength="200"
+                    placeholder="Contact (optional, e.g. Discord username)"
+                    class="w-full rounded bg-slate-800 p-2"
+                />
+                <button class="rounded bg-slate-100 px-4 py-2 font-medium text-slate-900">
+                    Submit appeal
+                </button>
+            </form>
+        )
+    }
+</Layout>

@@ -94,5 +94,5 @@ export const revokePunishment = (userId: string, punishmentId: string) =>
         const [row] = await db.select({ communityId: punishment.communityId }).from(punishment).where(eq(punishment.id, punishmentId));
         if (!row) return;
         await requireRole(db, userId, row.communityId, 'admin');
-        await db.update(punishment).set({ revokedAt: new Date() }).where(eq(punishment.id, punishmentId));
+        await db.update(punishment).set({ revokedAt: new Date(), revokedByUserId: userId }).where(eq(punishment.id, punishmentId));
     });

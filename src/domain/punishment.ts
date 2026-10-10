@@ -13,6 +13,16 @@ export const Uuid = Schema.String.check(Schema.isUUID());
 /** duration value meaning the punishment never expires. */
 export const NON_EXPIRING_PUNISHMENT = -1;
 
+/** Only these types are synced through the API and appealable; KICK stays mod-side. */
+export const APPEALABLE_TYPES = ['BAN', 'IP_BAN'] as const;
+
+// Both timestamp and duration are in seconds (the mod compares against System.currentTimeMillis() / 1000).
+export const isExpired = (p: { timestamp: number; duration: number }, nowMs: number): boolean =>
+    p.duration !== NON_EXPIRING_PUNISHMENT && (p.timestamp + p.duration) * 1000 <= nowMs;
+
+export const isActive = (p: { timestamp: number; duration: number; revokedAt: Date | null }, nowMs: number): boolean =>
+    p.revokedAt === null && !isExpired(p, nowMs);
+
 // Mirrors dev.matthiesen.global_ban.common.def.PunishmentRecord.
 export const PunishmentRecord = Schema.Struct({
     type: PunishmentType,

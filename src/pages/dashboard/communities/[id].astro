@@ -2,6 +2,7 @@
 import Layout from "../../../layouts/Layout.astro";
 import { runAction, runtime } from "../../../runtime";
 import { listCommunities } from "../../../services/dashboard";
+import { listOverrides, removeOverride } from "../../../services/appeals";
 import {
     deleteCommunity,
     transferCommunity,
@@ -78,6 +79,15 @@ if (Astro.request.method === "POST") {
                 transferCommunity(user.id, communityId, login),
             );
             break;
+        case "remove-override":
+            error = await runAction(
+                removeOverride(
+                    user.id,
+                    communityId,
+                    String(form.get("punishmentId") ?? ""),
+                ),
+            );
+            break;
         case "delete":
             error = await runAction(
                 deleteCommunity(
@@ -92,7 +102,7 @@ if (Astro.request.method === "POST") {
     if (!error) return Astro.redirect(Astro.url.pathname);
 }
 
-const [members, invites, requests, subs] = await Promise.all([
+const [members, invites, requests, subs, overrides] = await Promise.all([
     runtime.runPromise(listMembers(user.id, communityId)),
     isAdmin
         ? runtime.runPromise(listCommunityInvites(user.id, communityId))
@@ -101,6 +111,7 @@ const [members, invites, requests, subs] = await Promise.all([
     isAdmin
         ? runtime.runPromise(listSubscriptionRequests(user.id, communityId))
         : [],
+    isAdmin ? runtime.runPromise(listOverrides(user.id, communityId)) : [],
 ]);
 const isOwner = current.role === "owner";
 ---
@@ -277,6 +288,33 @@ const isOwner = current.role === "owner";
                         >
                             {s.status === "pending" ? "Deny" : "Revoke"}
                         </button>
+                    </form>
+                ))}
+
+                <h2 class="mb-2 mt-8 font-semibold">Ban overrides</h2>
+                <p class="mb-2 text-sm text-slate-400">
+                    Bans lifted for this community's servers only. Removing an
+                    override re-sends the ban.
+                </p>
+                {overrides.length === 0 && (
+                    <p class="text-sm text-slate-400">None</p>
+                )}
+                {overrides.map((o) => (
+                    <form method="post" class="mb-1 flex gap-3 text-sm">
+                        <input
+                            type="hidden"
+                            name="intent"
+                            value="remove-override"
+                        />
+                        <input
+                            type="hidden"
+                            name="punishmentId"
+                            value={o.punishmentId}
+                        />
+                        <span>
+                            {o.playerName} ({o.type}: {o.reason})
+                        </span>
+                        <button class="text-red-400">Remove</button>
                     </form>
                 ))}
             </>

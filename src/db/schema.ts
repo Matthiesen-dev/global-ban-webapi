@@ -130,6 +130,8 @@ export const punishment = sqliteTable(
         punisherDisplayName: text('punisher_display_name').notNull(),
         reason: text('reason').notNull(),
         revokedAt: integer('revoked_at', { mode: 'timestamp_ms' }),
+        // Null for revokes that arrived via a sync REMOVE, which carry no dashboard actor.
+        revokedByUserId: text('revoked_by_user_id').references(() => user.id, { onDelete: 'set null' }),
         createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     },
     (t) => [
@@ -161,6 +163,55 @@ export const ownershipTransfer = sqliteTable(
         createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     },
     (t) => [primaryKey({ columns: [t.kind, t.resourceId] })],
+);
+
+// One row per (punishment, deciding community); rows from one submission share a caseId and token.
+export const appeal = sqliteTable(
+    'appeal',
+    {
+        id: text('id').primaryKey(),
+        caseId: text('case_id').notNull(),
+        // SHA-256 of the case token; the token itself is shown to the player once.
+        tokenHash: text('token_hash').notNull(),
+        punishmentId: text('punishment_id').notNull().references(() => punishment.id, { onDelete: 'cascade' }),
+        communityId: text('community_id').notNull().references(() => community.id, { onDelete: 'cascade' }),
+        status: text('status', { enum: ['pending', 'approved', 'denied', 'withdrawn'] }).notNull().default('pending'),
+        contact: text('contact'),
+        decisionNote: text('decision_note'),
+        decidedByUserId: text('decided_by_user_id').references(() => user.id, { onDelete: 'set null' }),
+        decidedAt: integer('decided_at', { mode: 'timestamp_ms' }),
+        createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    },
+    (t) => [
+        uniqueIndex('appeal_punishment_community').on(t.punishmentId, t.communityId),
+        index('appeal_token_idx').on(t.tokenHash),
+        index('appeal_community_idx').on(t.communityId),
+    ],
+);
+
+export const appealMessage = sqliteTable(
+    'appeal_message',
+    {
+        id: text('id').primaryKey(),
+        appealId: text('appeal_id').notNull().references(() => appeal.id, { onDelete: 'cascade' }),
+        author: text('author', { enum: ['player', 'staff'] }).notNull(),
+        body: text('body').notNull(),
+        createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    },
+    (t) => [index('appeal_message_appeal_idx').on(t.appealId)],
+);
+
+// Lifts a ban for one community's servers only; the punishment itself stays active elsewhere.
+export const punishmentOverride = sqliteTable(
+    'punishment_override',
+    {
+        communityId: text('community_id').notNull().references(() => community.id, { onDelete: 'cascade' }),
+        punishmentId: text('punishment_id').notNull().references(() => punishment.id, { onDelete: 'cascade' }),
+        appealId: text('appeal_id').references(() => appeal.id, { onDelete: 'set null' }),
+        createdByUserId: text('created_by_user_id').references(() => user.id, { onDelete: 'set null' }),
+        createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    },
+    (t) => [primaryKey({ columns: [t.communityId, t.punishmentId] })],
 );
 
 export const serverRelations = relations(server, ({ one }) => ({

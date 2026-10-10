@@ -1,0 +1,114 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { runAction, runtime } from "../../runtime";
+import {
+    addStaffMessage,
+    decideAppeal,
+    listAppeals,
+} from "../../services/appeals";
+
+const user = Astro.locals.user!;
+let error: string | null = null;
+
+if (Astro.request.method === "POST") {
+    const form = await Astro.request.formData();
+    const id = String(form.get("id") ?? "");
+    const note = String(form.get("note") ?? "");
+    switch (form.get("intent")) {
+        case "approve":
+        case "deny":
+            error = await runAction(
+                decideAppeal(
+                    user.id,
+                    id,
+                    form.get("intent") === "approve",
+                    note,
+                ),
+            );
+            break;
+        case "message":
+            error = await runAction(addStaffMessage(user.id, id, note));
+            break;
+    }
+    if (!error) return Astro.redirect(Astro.url.pathname);
+}
+
+const appeals = await runtime.runPromise(listAppeals(user.id));
+---
+
+<Layout title="Appeals">
+    <h1 class="mb-4 text-2xl font-bold">Appeals</h1>
+    {error && <p class="mb-4 rounded bg-red-900 p-2">{error}</p>}
+    {appeals.length === 0 && <p class="text-slate-400">No appeals.</p>}
+    <div class="space-y-6">
+        {
+            appeals.map((a) => (
+                <section class="rounded border border-slate-800 p-3">
+                    <h2 class="font-semibold">
+                        {a.playerName}{" "}
+                        <span class="text-slate-400">
+                            ({a.type}, {a.playerIp})
+                        </span>
+                    </h2>
+                    <p class="text-sm text-slate-400">
+                        {a.communityName} · {a.status} ·{" "}
+                        {a.isOrigin
+                            ? "approving revokes the ban everywhere"
+                            : "approving lifts the ban for your servers only"}
+                    </p>
+                    <p class="my-2">Ban reason: {a.reason}</p>
+                    {a.contact && (
+                        <p class="text-sm text-slate-400">
+                            Contact: {a.contact}
+                        </p>
+                    )}
+                    <ul class="my-2 space-y-1">
+                        {a.messages.map((m) => (
+                            <li>
+                                <span class="text-slate-400">
+                                    {m.author === "staff" ? "Staff" : "Player"}:
+                                </span>{" "}
+                                {m.body}
+                            </li>
+                        ))}
+                    </ul>
+                    {a.decisionNote && (
+                        <p class="text-sm">Decision: {a.decisionNote}</p>
+                    )}
+                    {a.status === "pending" && (
+                        <form method="post" class="mt-2 flex gap-2">
+                            <input type="hidden" name="id" value={a.id} />
+                            <input
+                                name="note"
+                                maxlength="2000"
+                                placeholder="Note or reply"
+                                class="flex-1 rounded bg-slate-800 p-2"
+                            />
+                            <button
+                                name="intent"
+                                value="message"
+                                class="text-slate-300"
+                            >
+                                Reply
+                            </button>
+                            <button
+                                name="intent"
+                                value="approve"
+                                class="text-green-400"
+                            >
+                                Approve
+                            </button>
+                            <button
+                                name="intent"
+                                value="deny"
+                                class="text-red-400"
+                            >
+                                Deny
+                            </button>
+                        </form>
+                    )}
+                </section>
+            ))
+        }
+    </div>
+</Layout>

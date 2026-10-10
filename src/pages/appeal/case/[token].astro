@@ -1,0 +1,109 @@
+---
+import Layout from "../../../layouts/Layout.astro";
+import { runPublic } from "../../../runtime";
+import {
+    addPlayerMessage,
+    getCase,
+    withdrawAppeal,
+} from "../../../services/appeals";
+
+// The token is a credential: keep it out of referrers and caches.
+Astro.response.headers.set("Referrer-Policy", "no-referrer");
+Astro.response.headers.set("Cache-Control", "no-store");
+
+const token = Astro.params.token ?? "";
+let error: string | null = null;
+
+if (Astro.request.method === "POST") {
+    const form = await Astro.request.formData();
+    const appealId = String(form.get("appealId") ?? "");
+    const outcome = await runPublic(
+        form.get("intent") === "withdraw"
+            ? withdrawAppeal(token, appealId)
+            : addPlayerMessage(
+                  token,
+                  appealId,
+                  String(form.get("message") ?? ""),
+              ),
+    );
+    if (outcome.ok) return Astro.redirect(Astro.url.pathname);
+    error = outcome.error;
+}
+
+const found = await runPublic(getCase(token));
+const appeals = found.ok ? found.value : null;
+if (!appeals) return new Response("Not found", { status: 404 });
+---
+
+<Layout title="Your appeal">
+    <h1 class="mb-2 text-2xl font-bold">Your appeal</h1>
+    <p class="mb-4 text-slate-400">
+        Bookmark this page; the link is the only way to get back to it.
+    </p>
+    {error && <p class="mb-4 rounded bg-red-900 p-2">{error}</p>}
+    <div class="space-y-6">
+        {
+            appeals.map((a) => (
+                <section class="rounded border border-slate-800 p-3">
+                    <h2 class="font-semibold">
+                        {a.communityName}{" "}
+                        <span class="text-slate-400">
+                            ({a.type}: {a.reason})
+                        </span>
+                    </h2>
+                    <p class="mb-2 text-sm uppercase text-slate-400">
+                        {a.status}
+                    </p>
+                    {a.decisionNote && (
+                        <p class="mb-2">Decision: {a.decisionNote}</p>
+                    )}
+                    <ul class="mb-3 space-y-1">
+                        {a.messages.map((m) => (
+                            <li>
+                                <span class="text-slate-400">
+                                    {m.author === "staff" ? "Staff" : "You"}:
+                                </span>{" "}
+                                {m.body}
+                            </li>
+                        ))}
+                    </ul>
+                    {a.status === "pending" && (
+                        <div class="space-y-2">
+                            <form method="post" class="flex gap-2">
+                                <input
+                                    type="hidden"
+                                    name="appealId"
+                                    value={a.id}
+                                />
+                                <input
+                                    name="message"
+                                    required
+                                    maxlength="2000"
+                                    placeholder="Reply"
+                                    class="flex-1 rounded bg-slate-800 p-2"
+                                />
+                                <button class="rounded bg-slate-100 px-4 py-2 font-medium text-slate-900">
+                                    Send
+                                </button>
+                            </form>
+                            <form method="post">
+                                <input
+                                    type="hidden"
+                                    name="appealId"
+                                    value={a.id}
+                                />
+                                <button
+                                    name="intent"
+                                    value="withdraw"
+                                    class="text-red-400 hover:text-red-300"
+                                >
+                                    Withdraw
+                                </button>
+                            </form>
+                        </div>
+                    )}
+                </section>
+            ))
+        }
+    </div>
+</Layout>

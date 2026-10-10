@@ -104,6 +104,8 @@ Two in-memory token buckets guard the endpoint ([src/services/rateLimit.ts](src/
 
 Both are far above the mod's minimum one-minute sync interval. State is per process, so it resets on restart and is not shared between multiple instances. IPv6 clients are limited per /64.
 
+The public appeal pages use their own per-IP buckets: name lookups (burst 20, 1 per 5 seconds), IP lookups (burst 5, 1 per 50 seconds) and appeal submissions (burst 5, 1 per 200 seconds).
+
 #### Reverse proxies
 
 By default the limiter uses the connection's address, which behind a proxy is the proxy itself. Set `TRUSTED_PROXY` so the real client IP is used instead:
@@ -119,6 +121,7 @@ If the expected header is missing or not a valid IP, the connection address is u
 - **Communities:** create communities, request to join, accept invites, subscribe to other communities.
 - **Community page:** members and roles, invites by GitHub username, join requests, subscription approvals, ownership transfer and deletion.
 - **Punishments:** punishments from your communities, with player IPs always masked. Admins can revoke.
+- **Appeals:** appeals sent to communities you administer. See [Appeals](#appeals).
 - **Transfers:** accept, decline or cancel ownership offers.
 
 ### Roles and access
@@ -128,7 +131,7 @@ New accounts only see their own servers and communities.
 | Role | Can do |
 | --- | --- |
 | Owner | Everything, including promoting admins, transferring ownership and deleting the community |
-| Admin | Invite members, approve join requests, remove members, approve subscriptions, revoke punishments |
+| Admin | Invite members, approve join requests, remove members, approve subscriptions, revoke punishments, decide appeals and manage ban overrides |
 | Member | View members and punishments, add their own servers, leave |
 
 - Invites are tied to a GitHub username and can only be accepted by that GitHub account.
@@ -137,13 +140,34 @@ New accounts only see their own servers and communities.
 - Ownership transfers need the recipient to accept. A transferred server leaves its community if the new owner is not a member of it.
 - Deleting a server or community requires typing its name. Deleting a community removes its punishment records. Deleting a server keeps the punishments it originated.
 
+## Appeals
+
+Players can appeal bans without an account. Only `BAN` and `IP_BAN` punishments are appealable; `KICK` never reaches this API.
+
+1. At `/appeal` the player looks up their name or IP address. Only active (not revoked, not expired) bans are listed, and only the community, type, reason and date are shown. The IP, punisher and server are never exposed.
+2. The player picks the bans and communities to appeal to and submits a message with an optional contact. Each community gets its own appeal. Eligible communities are the one that issued the ban plus every community with an approved subscription to it.
+3. The player receives a private link, `/appeal/case/<token>`, to read replies, answer or withdraw. The token is shown once and only its SHA-256 hash is stored, so keep the link.
+4. Admins of the receiving community review it under **Appeals** in the dashboard and can reply, approve or deny.
+
+What approval does depends on who decides:
+
+- **Issuing community:** the punishment is revoked everywhere, and servers receive a `REMOVE` on their next sync.
+- **Subscribing community:** a ban override is created. The ban is lifted for that community's servers only and stays active elsewhere. Admins list and remove overrides on the community page; removing one re-sends the ban to the community's servers.
+
+The deciding admin is recorded as `decidedByUserId` on the appeal and `revokedByUserId` on a revoked punishment. Dashboard revokes record it too; revokes that arrive through sync do not.
+
+Each punishment and community pair can be appealed once. A withdrawn appeal can be filed again; a decided one cannot.
+
+Because there is no login, anyone who knows a player's name can look up and appeal that player's bans. Lookups and submissions are rate limited per client IP, with the strictest limit on IP lookups.
+
 ## Project layout
 
 ```
 src/domain/     Effect schemas mirroring the mod's Java records, IP masking
 src/db/         Drizzle schema and client
-src/services/   Effect services: sync, dashboard, membership, ownership
+src/services/   Effect services: sync, dashboard, membership, ownership, appeals
 src/pages/api/  /api/v1/sync and the better-auth handler
+src/pages/appeal/     Public appeal lookup, submission and case pages
 src/pages/dashboard/  Server-rendered dashboard pages
 drizzle/        Generated SQL migrations
 ```
