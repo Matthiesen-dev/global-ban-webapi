@@ -28,14 +28,23 @@ const navLinks = [
         label: "Transfers",
     },
 ];
+
+const pageTitle = title ? `${title} | Global Ban` : "Global Ban";
 ---
 
 <!doctype html>
 <html lang="en">
     <head>
         <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width" />
-        <title>{title} | Global Ban</title>
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <meta name="generator" content={Astro.generator} />
+        <title>{pageTitle}</title>
+        <meta name="title" content={pageTitle} />
+        <meta
+            name="description"
+            content="Global Ban is a service for managing shared bans across multiple servers."
+        />
+        <meta name="theme-color" content="#0f172a" />
     </head>
     <body class="min-h-screen bg-slate-950 text-slate-100">
         <header class="border-b border-slate-800">
