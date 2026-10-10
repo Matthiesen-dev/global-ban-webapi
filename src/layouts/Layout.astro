@@ -5,6 +5,25 @@ interface Props {
 }
 const { title } = Astro.props;
 const user = Astro.locals.user;
+
+const navLinks = [
+    {
+        href: "/dashboard/servers",
+        label: "Servers",
+    },
+    {
+        href: "/dashboard/communities",
+        label: "Communities",
+    },
+    {
+        href: "/dashboard/punishments",
+        label: "Punishments",
+    },
+    {
+        href: "/dashboard/transfers",
+        label: "Transfers",
+    },
+];
 ---
 
 <!doctype html>
@@ -21,30 +40,14 @@ const user = Astro.locals.user;
                 {
                     user && (
                         <>
-                            <a
-                                href="/dashboard/servers"
-                                class="text-slate-300 hover:text-white"
-                            >
-                                Servers
-                            </a>
-                            <a
-                                href="/dashboard/communities"
-                                class="text-slate-300 hover:text-white"
-                            >
-                                Communities
-                            </a>
-                            <a
-                                href="/dashboard/punishments"
-                                class="text-slate-300 hover:text-white"
-                            >
-                                Punishments
-                            </a>
-                            <a
-                                href="/dashboard/transfers"
-                                class="text-slate-300 hover:text-white"
-                            >
-                                Transfers
-                            </a>
+                            {navLinks.map((link) => (
+                                <a
+                                    href={link.href}
+                                    class="text-slate-300 hover:text-white"
+                                >
+                                    {link.label}
+                                </a>
+                            ))}
                             <form
                                 method="post"
                                 action="/logout"
