@@ -8,6 +8,9 @@ import { Db } from './db';
 
 type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
 
+// Stand-in origin for punishments whose server registration was deleted.
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
 const naturalKey = (r: PunishmentSync['record'], originServerUuid: string) =>
     and(
         eq(punishment.playerUuid, r.playerUuid),
@@ -62,7 +65,7 @@ const outgoing = async (tx: Tx, caller: string, visible: string[], now: Date): P
     const rows = await tx
         .select({ p: punishment, originPublicId: server.publicId })
         .from(punishment)
-        .innerJoin(server, eq(server.uuid, punishment.originServerUuid))
+        .leftJoin(server, eq(server.uuid, punishment.originServerUuid))
         .where(inArray(punishment.communityId, visible));
     const delivered = await tx.select().from(punishmentDelivery).where(eq(punishmentDelivery.serverUuid, caller));
     const has = new Set(delivered.map((d) => `${d.punishmentId}:${d.syncType}`));
@@ -80,7 +83,7 @@ const outgoing = async (tx: Tx, caller: string, visible: string[], now: Date): P
             punisherUuid: p.punisherUuid,
             punisherDisplayName: p.punisherDisplayName,
             reason: p.reason,
-            serverUuid: originPublicId,
+            serverUuid: originPublicId ?? NIL_UUID,
         };
         const hasAdd = has.has(`${p.id}:ADD`);
         if (p.revokedAt === null && !hasAdd) {

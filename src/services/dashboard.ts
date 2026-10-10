@@ -77,7 +77,7 @@ export const listPunishments = (userId: string) =>
         const rows = await db
             .select({ p: punishment, serverName: server.name, communityName: community.name })
             .from(punishment)
-            .innerJoin(server, eq(server.uuid, punishment.originServerUuid))
+            .leftJoin(server, eq(server.uuid, punishment.originServerUuid))
             .innerJoin(community, eq(community.id, punishment.communityId))
             .where(inArray(punishment.communityId, ids))
             .orderBy(desc(punishment.createdAt))
@@ -85,7 +85,7 @@ export const listPunishments = (userId: string) =>
         // Drop the secret server uuid before anything reaches a template.
         return rows.map(({ p, serverName, communityName }) => {
             const { originServerUuid: _omit, ...safe } = p;
-            return { ...safe, playerIp: maskIp(safe.playerIp), serverName, communityName };
+            return { ...safe, playerIp: maskIp(safe.playerIp), serverName: serverName ?? 'Deleted server', communityName };
         });
     });
 

@@ -17,7 +17,9 @@ export const query = <A>(f: (db: Database) => Promise<A>) =>
         });
     });
 
-export const getRole = async (db: Database, userId: string, communityId: string): Promise<Role | null> => {
+export type Executor = Pick<Database, 'select'>;
+
+export const getRole = async (db: Executor, userId: string, communityId: string): Promise<Role | null> => {
     const [row] = await db
         .select({ role: communityMember.role })
         .from(communityMember)
@@ -26,7 +28,7 @@ export const getRole = async (db: Database, userId: string, communityId: string)
 };
 
 // Non-members get the same error as insufficient rank so community ids cannot be probed.
-export const requireRole = async (db: Database, userId: string, communityId: string, min: Role) => {
+export const requireRole = async (db: Executor, userId: string, communityId: string, min: Role) => {
     const role = await getRole(db, userId, communityId);
     if (!role || RANK[role] < RANK[min]) throw new Forbidden({ message: 'You do not have permission to do that' });
     return role;

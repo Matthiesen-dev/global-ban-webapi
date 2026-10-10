@@ -3,6 +3,10 @@ import Layout from "../../../layouts/Layout.astro";
 import { runAction, runtime } from "../../../runtime";
 import { listCommunities } from "../../../services/dashboard";
 import {
+    deleteCommunity,
+    transferCommunity,
+} from "../../../services/ownership";
+import {
     cancelInvite,
     inviteMember,
     listCommunityInvites,
@@ -68,6 +72,21 @@ if (Astro.request.method === "POST") {
                     form.get("intent") === "approve-sub",
                 ),
             );
+            break;
+        case "transfer":
+            error = await runAction(
+                transferCommunity(user.id, communityId, login),
+            );
+            break;
+        case "delete":
+            error = await runAction(
+                deleteCommunity(
+                    user.id,
+                    communityId,
+                    String(form.get("confirm") ?? ""),
+                ),
+            );
+            if (!error) return Astro.redirect("/dashboard/communities");
             break;
     }
     if (!error) return Astro.redirect(Astro.url.pathname);
@@ -260,6 +279,48 @@ const isOwner = current.role === "owner";
                         </button>
                     </form>
                 ))}
+            </>
+        )
+    }
+
+    {
+        isOwner && (
+            <>
+                <h2 class="mb-2 mt-8 font-semibold">Transfer ownership</h2>
+                <p class="mb-2 text-sm text-slate-400">
+                    The new owner must be a member and accept. You become an
+                    admin.
+                </p>
+                <form method="post" class="flex gap-2">
+                    <input type="hidden" name="intent" value="transfer" />
+                    <input
+                        name="githubLogin"
+                        placeholder="GitHub username"
+                        required
+                        class="rounded bg-slate-800 p-2"
+                    />
+                    <button class="rounded border border-slate-600 px-4 py-2">
+                        Offer transfer
+                    </button>
+                </form>
+
+                <h2 class="mb-2 mt-8 font-semibold text-red-400">
+                    Delete community
+                </h2>
+                <p class="mb-2 text-sm text-slate-400">
+                    Removes its members, subscriptions and punishment records.
+                    Servers are detached, not deleted.
+                </p>
+                <form method="post" class="flex gap-2">
+                    <input type="hidden" name="intent" value="delete" />
+                    <input
+                        name="confirm"
+                        placeholder={`Type "${current.name}" to confirm`}
+                        required
+                        class="w-72 rounded bg-slate-800 p-2"
+                    />
+                    <button class="rounded bg-red-700 px-4 py-2">Delete</button>
+                </form>
             </>
         )
     }

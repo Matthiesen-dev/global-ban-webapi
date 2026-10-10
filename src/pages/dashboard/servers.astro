@@ -9,6 +9,7 @@ import {
     listServers,
     registerServer,
 } from "../../services/dashboard";
+import { deleteServer, transferServer } from "../../services/ownership";
 
 const user = Astro.locals.user!;
 let error: string | null = null;
@@ -21,6 +22,18 @@ if (Astro.request.method === "POST") {
     const communityId = String(form.get("communityId") ?? "") || null;
     if (form.get("intent") === "assign" && communityId) {
         error = await runAction(assignServer(user.id, uuid, communityId));
+    } else if (form.get("intent") === "transfer") {
+        error = await runAction(
+            transferServer(
+                user.id,
+                uuid,
+                String(form.get("githubLogin") ?? ""),
+            ),
+        );
+    } else if (form.get("intent") === "delete") {
+        error = await runAction(
+            deleteServer(user.id, uuid, String(form.get("confirm") ?? "")),
+        );
     } else if (!Schema.is(Uuid)(uuid)) {
         error = "Enter the server UUID from the mod config.";
     } else {
@@ -109,6 +122,49 @@ const fmt = (d: Date | null) => (d ? d.toLocaleString() : "never");
                                     Move
                                 </button>
                             </form>
+                            <details class="mt-1 text-sm">
+                                <summary class="cursor-pointer text-slate-400">
+                                    More
+                                </summary>
+                                <form method="post" class="mt-1 flex gap-2">
+                                    <input
+                                        type="hidden"
+                                        name="intent"
+                                        value="transfer"
+                                    />
+                                    <input
+                                        type="hidden"
+                                        name="uuid"
+                                        value={s.uuid}
+                                    />
+                                    <input
+                                        name="githubLogin"
+                                        placeholder="GitHub username"
+                                        required
+                                        class="rounded bg-slate-800 p-1"
+                                    />
+                                    <button>Offer transfer</button>
+                                </form>
+                                <form method="post" class="mt-1 flex gap-2">
+                                    <input
+                                        type="hidden"
+                                        name="intent"
+                                        value="delete"
+                                    />
+                                    <input
+                                        type="hidden"
+                                        name="uuid"
+                                        value={s.uuid}
+                                    />
+                                    <input
+                                        name="confirm"
+                                        placeholder={`Type "${s.name}" to confirm`}
+                                        required
+                                        class="rounded bg-slate-800 p-1"
+                                    />
+                                    <button class="text-red-400">Delete</button>
+                                </form>
+                            </details>
                         </td>
                     </tr>
                 ))

@@ -1,0 +1,71 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { runAction, runtime } from "../../runtime";
+import {
+    cancelTransfer,
+    listTransfers,
+    respondTransfer,
+} from "../../services/ownership";
+
+const user = Astro.locals.user!;
+let error: string | null = null;
+
+if (Astro.request.method === "POST") {
+    const form = await Astro.request.formData();
+    const kind = form.get("kind") === "community" ? "community" : "server";
+    const id = String(form.get("id") ?? "");
+    const intent = form.get("intent");
+    if (intent === "cancel") {
+        error = await runAction(cancelTransfer(user.id, kind, id));
+    } else {
+        error = await runAction(
+            respondTransfer(user.id, kind, id, intent === "accept"),
+        );
+    }
+    if (!error) return Astro.redirect(Astro.url.pathname);
+}
+
+const { incoming, outgoing } = await runtime.runPromise(listTransfers(user.id));
+---
+
+<Layout title="Transfers">
+    <h1 class="mb-4 text-2xl font-bold">Ownership transfers</h1>
+    {error && <p class="mb-4 rounded bg-red-900 p-2">{error}</p>}
+
+    <h2 class="mb-2 font-semibold">Offered to you</h2>
+    {incoming.length === 0 && <p class="mb-6 text-sm text-slate-400">None</p>}
+    {
+        incoming.map((t) => (
+            <form method="post" class="mb-2 flex items-center gap-3 text-sm">
+                <input type="hidden" name="kind" value={t.kind} />
+                <input type="hidden" name="id" value={t.resourceId} />
+                <span>
+                    {t.fromName} offers you the {t.kind} "{t.resourceName}"
+                </span>
+                <button name="intent" value="accept" class="text-green-400">
+                    Accept
+                </button>
+                <button name="intent" value="decline" class="text-red-400">
+                    Decline
+                </button>
+            </form>
+        ))
+    }
+
+    <h2 class="mb-2 mt-8 font-semibold">Offered by you</h2>
+    {outgoing.length === 0 && <p class="text-sm text-slate-400">None</p>}
+    {
+        outgoing.map((t) => (
+            <form method="post" class="mb-2 flex items-center gap-3 text-sm">
+                <input type="hidden" name="kind" value={t.kind} />
+                <input type="hidden" name="id" value={t.resourceId} />
+                <span>
+                    {t.kind} "{t.resourceName}" to {t.toName}
+                </span>
+                <button name="intent" value="cancel" class="text-red-400">
+                    Cancel
+                </button>
+            </form>
+        ))
+    }
+</Layout>

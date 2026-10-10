@@ -118,7 +118,8 @@ export const punishment = sqliteTable(
     {
         id: text('id').primaryKey(),
         communityId: text('community_id').notNull().references(() => community.id, { onDelete: 'cascade' }),
-        originServerUuid: text('origin_server_uuid').notNull().references(() => server.uuid, { onDelete: 'cascade' }),
+        // Null once the origin server is deleted; the record stays so community bans are not lost.
+        originServerUuid: text('origin_server_uuid').references(() => server.uuid, { onDelete: 'set null' }),
         type: text('type', { enum: ['BAN', 'IP_BAN', 'KICK'] }).notNull(),
         timestamp: integer('timestamp').notNull(),
         duration: integer('duration').notNull(),
@@ -147,6 +148,19 @@ export const punishmentDelivery = sqliteTable(
         deliveredAt: integer('delivered_at', { mode: 'timestamp_ms' }).notNull(),
     },
     (t) => [primaryKey({ columns: [t.serverUuid, t.punishmentId, t.syncType] })],
+);
+
+// A pending hand-over; nothing changes until the recipient accepts.
+export const ownershipTransfer = sqliteTable(
+    'ownership_transfer',
+    {
+        kind: text('kind', { enum: ['server', 'community'] }).notNull(),
+        resourceId: text('resource_id').notNull(),
+        fromUserId: text('from_user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+        toUserId: text('to_user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+        createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    },
+    (t) => [primaryKey({ columns: [t.kind, t.resourceId] })],
 );
 
 export const serverRelations = relations(server, ({ one }) => ({
