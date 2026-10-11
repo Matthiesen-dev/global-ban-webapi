@@ -1,5 +1,5 @@
 ---
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import Layout from "../../layouts/Layout.astro";
 import { Uuid } from "../../domain/punishment";
 import { runAction, runtime } from "../../runtime";
@@ -49,10 +49,13 @@ if (Astro.request.method === "POST") {
     if (!error) return Astro.redirect(Astro.url.pathname);
 }
 
-const [servers, communities] = await Promise.all([
-    runtime.runPromise(listServers(user.id)),
-    runtime.runPromise(listCommunities(user.id)),
-]);
+const { servers, communities } = await runtime.runPromise(
+    Effect.all({
+        servers: listServers(user.id),
+        communities: listCommunities(user.id),
+    }),
+);
+
 const fmt = (d: Date | null) => (d ? d.toLocaleString() : "never");
 ---
 

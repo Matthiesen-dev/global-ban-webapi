@@ -14,6 +14,7 @@ import {
     listCommunities,
     subscribe,
 } from "../../services/dashboard";
+import { Effect } from "effect";
 
 const user = Astro.locals.user!;
 let error: string | null = null;
@@ -45,11 +46,13 @@ if (Astro.request.method === "POST") {
     if (!error) return Astro.redirect(Astro.url.pathname);
 }
 
-const [communities, invites, requests] = await Promise.all([
-    runtime.runPromise(listCommunities(user.id)),
-    runtime.runPromise(listMyInvites(user)),
-    runtime.runPromise(listMyRequests(user.id)),
-]);
+const { communities, invites, requests } = await runtime.runPromise(
+    Effect.all({
+        communities: listCommunities(user.id),
+        invites: listMyInvites(user),
+        requests: listMyRequests(user.id),
+    }),
+);
 ---
 
 <Layout title="Communities">

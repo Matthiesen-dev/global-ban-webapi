@@ -19,6 +19,7 @@ import {
     respondSubscription,
     setRole,
 } from "../../../services/membership";
+import { Effect } from "effect";
 
 const user = Astro.locals.user!;
 const communityId = Astro.params.id!;
@@ -102,17 +103,25 @@ if (Astro.request.method === "POST") {
     if (!error) return Astro.redirect(Astro.url.pathname);
 }
 
-const [members, invites, requests, subs, overrides] = await Promise.all([
-    runtime.runPromise(listMembers(user.id, communityId)),
-    isAdmin
-        ? runtime.runPromise(listCommunityInvites(user.id, communityId))
-        : [],
-    isAdmin ? runtime.runPromise(listJoinRequests(user.id, communityId)) : [],
-    isAdmin
-        ? runtime.runPromise(listSubscriptionRequests(user.id, communityId))
-        : [],
-    isAdmin ? runtime.runPromise(listOverrides(user.id, communityId)) : [],
-]);
+const { members, invites, requests, subs, overrides } =
+    await runtime.runPromise(
+        Effect.all({
+            members: listMembers(user.id, communityId),
+            invites: isAdmin
+                ? listCommunityInvites(user.id, communityId)
+                : Effect.succeed([]),
+            requests: isAdmin
+                ? listJoinRequests(user.id, communityId)
+                : Effect.succeed([]),
+            subs: isAdmin
+                ? listSubscriptionRequests(user.id, communityId)
+                : Effect.succeed([]),
+            overrides: isAdmin
+                ? listOverrides(user.id, communityId)
+                : Effect.succeed([]),
+        }),
+    );
+
 const isOwner = current.role === "owner";
 ---
 
