@@ -2,8 +2,9 @@
   "name": "global-ban-webapi",
   "type": "module",
   "version": "0.0.1",
+  "packageManager": "pnpm@11.10.0",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.20.0"
   },
   "scripts": {
     "dev": "astro dev",
