@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "b13bd01a-3734-463c-b19b-38ee62c9964b",
+  "id": "1b47b5bb-bedf-402b-ad3c-da7e2622c61a",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -107,6 +107,224 @@
           "tableTo": "user",
           "columnsFrom": [
             "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "appeal": {
+      "name": "appeal",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "case_id": {
+          "name": "case_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "punishment_id": {
+          "name": "punishment_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "community_id": {
+          "name": "community_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "contact": {
+          "name": "contact",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "decision_note": {
+          "name": "decision_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "decided_by_user_id": {
+          "name": "decided_by_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "decided_at": {
+          "name": "decided_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "appeal_punishment_community": {
+          "name": "appeal_punishment_community",
+          "columns": [
+            "punishment_id",
+            "community_id"
+          ],
+          "isUnique": true
+        },
+        "appeal_token_idx": {
+          "name": "appeal_token_idx",
+          "columns": [
+            "token_hash"
+          ],
+          "isUnique": false
+        },
+        "appeal_community_idx": {
+          "name": "appeal_community_idx",
+          "columns": [
+            "community_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "appeal_punishment_id_punishment_id_fk": {
+          "name": "appeal_punishment_id_punishment_id_fk",
+          "tableFrom": "appeal",
+          "tableTo": "punishment",
+          "columnsFrom": [
+            "punishment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "appeal_community_id_community_id_fk": {
+          "name": "appeal_community_id_community_id_fk",
+          "tableFrom": "appeal",
+          "tableTo": "community",
+          "columnsFrom": [
+            "community_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "appeal_decided_by_user_id_user_id_fk": {
+          "name": "appeal_decided_by_user_id_user_id_fk",
+          "tableFrom": "appeal",
+          "tableTo": "user",
+          "columnsFrom": [
+            "decided_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "appeal_message": {
+      "name": "appeal_message",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "appeal_id": {
+          "name": "appeal_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "author": {
+          "name": "author",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "appeal_message_appeal_idx": {
+          "name": "appeal_message_appeal_idx",
+          "columns": [
+            "appeal_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "appeal_message_appeal_id_appeal_id_fk": {
+          "name": "appeal_message_appeal_id_appeal_id_fk",
+          "tableFrom": "appeal_message",
+          "tableTo": "appeal",
+          "columnsFrom": [
+            "appeal_id"
           ],
           "columnsTo": [
             "id"
@@ -631,6 +849,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "revoked_by_user_id": {
+          "name": "revoked_by_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -681,6 +906,19 @@
           ],
           "columnsTo": [
             "uuid"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "punishment_revoked_by_user_id_user_id_fk": {
+          "name": "punishment_revoked_by_user_id_user_id_fk",
+          "tableFrom": "punishment",
+          "tableTo": "user",
+          "columnsFrom": [
+            "revoked_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
           ],
           "onDelete": "set null",
           "onUpdate": "no action"
@@ -759,6 +997,112 @@
             "sync_type"
           ],
           "name": "punishment_delivery_server_uuid_punishment_id_sync_type_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "punishment_override": {
+      "name": "punishment_override",
+      "columns": {
+        "community_id": {
+          "name": "community_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "punishment_id": {
+          "name": "punishment_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "appeal_id": {
+          "name": "appeal_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_by_user_id": {
+          "name": "created_by_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "punishment_override_community_id_community_id_fk": {
+          "name": "punishment_override_community_id_community_id_fk",
+          "tableFrom": "punishment_override",
+          "tableTo": "community",
+          "columnsFrom": [
+            "community_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "punishment_override_punishment_id_punishment_id_fk": {
+          "name": "punishment_override_punishment_id_punishment_id_fk",
+          "tableFrom": "punishment_override",
+          "tableTo": "punishment",
+          "columnsFrom": [
+            "punishment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "punishment_override_appeal_id_appeal_id_fk": {
+          "name": "punishment_override_appeal_id_appeal_id_fk",
+          "tableFrom": "punishment_override",
+          "tableTo": "appeal",
+          "columnsFrom": [
+            "appeal_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "punishment_override_created_by_user_id_user_id_fk": {
+          "name": "punishment_override_created_by_user_id_user_id_fk",
+          "tableFrom": "punishment_override",
+          "tableTo": "user",
+          "columnsFrom": [
+            "created_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "punishment_override_community_id_punishment_id_pk": {
+          "columns": [
+            "community_id",
+            "punishment_id"
+          ],
+          "name": "punishment_override_community_id_punishment_id_pk"
         }
       },
       "uniqueConstraints": {},

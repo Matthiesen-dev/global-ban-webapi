@@ -1,11 +1,8 @@
 import { defineConfig } from 'drizzle-kit';
-import { loadEnv } from "vite";
-
-const { DATABASE_URL } = loadEnv(process.env.NODE_ENV ?? 'development', process.cwd(), "");
 
 export default defineConfig({
-    dialect: 'sqlite',
+    dialect: 'turso',
     schema: './src/db/schema.ts',
     out: './drizzle',
-    dbCredentials: { url: DATABASE_URL ?? 'file:local.db' },
+    dbCredentials: { url: process.env.DATABASE_URL ?? 'file:local.db', authToken: process.env.DATABASE_AUTH_TOKEN ?? '' },
 });
