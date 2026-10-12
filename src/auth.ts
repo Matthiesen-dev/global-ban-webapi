@@ -2,7 +2,7 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { makeDatabase } from './db/client';
 import * as schema from './db/schema';
-import { DATABASE_URL, DATABASE_AUTH_TOKEN, DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET } from 'astro:env/server';
+import { DATABASE_URL, DATABASE_AUTH_TOKEN, DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, BETTER_AUTH_URL } from 'astro:env/server';
 import { discordProfileToUser } from './authProfile';
 
 export const auth = betterAuth({
@@ -10,6 +10,7 @@ export const auth = betterAuth({
         provider: 'sqlite',
         schema,
     }),
+    baseURL: BETTER_AUTH_URL,
     socialProviders: {
         discord: {
             clientId: DISCORD_CLIENT_ID ?? '',
