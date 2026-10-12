@@ -25,14 +25,16 @@ const handle = (request: Request, clientIp: string) =>
             Effect.mapError(() => new InvalidPayload({ message: 'Missing or invalid X-Global-Ban-UUID header' })),
         );
         yield* limiter.checkServer(serverUuid);
-        const text = yield* Effect.promise(() => request.text());
-        if (text.length > MAX_BODY_BYTES) return yield* Effect.fail(new InvalidPayload({ message: 'Body too large' }));
-        const body = yield* Effect.try({
-            try: () => JSON.parse(text) as unknown,
-            catch: () => new InvalidPayload({ message: 'Body is not valid JSON' }),
-        });
-        const incoming = yield* Schema.decodeUnknownEffect(SyncData)(body).pipe(
-            Effect.mapError(() => new InvalidPayload({ message: 'Body does not match SyncData' })),
+        const incoming = yield* Effect.promise(() => request.text()).pipe(
+            Effect.andThen((text) => {
+                if (text.length > MAX_BODY_BYTES) return Effect.fail(new InvalidPayload({ message: 'Body too large' }));
+                return Effect.try({
+                    try: () => JSON.parse(text) as unknown,
+                    catch: () => new InvalidPayload({ message: 'Body is not valid JSON' }),
+                });
+            }),
+            Schema.decodeUnknownEffect(SyncData),
+            Effect.catchTag('SchemaError', () => Effect.fail(new InvalidPayload({ message: 'Body does not match SyncData' }))),
         );
         return yield* sync(serverUuid, incoming);
     }).pipe(
