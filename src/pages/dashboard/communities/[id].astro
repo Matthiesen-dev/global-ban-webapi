@@ -34,16 +34,18 @@ let error: string | null = null;
 if (Astro.request.method === "POST") {
     const form = await Astro.request.formData();
     const target = String(form.get("userId") ?? "");
-    const login = String(form.get("githubLogin") ?? "");
+    const discordId = String(form.get("discordId") ?? "");
     const role = form.get("role") === "admin" ? "admin" : "member";
     switch (form.get("intent")) {
         case "invite":
             error = await runAction(
-                inviteMember(user.id, communityId, login, role),
+                inviteMember(user.id, communityId, discordId, role),
             );
             break;
         case "cancel-invite":
-            error = await runAction(cancelInvite(user.id, communityId, login));
+            error = await runAction(
+                cancelInvite(user.id, communityId, discordId),
+            );
             break;
         case "set-role":
             error = await runAction(
@@ -77,7 +79,7 @@ if (Astro.request.method === "POST") {
             break;
         case "transfer":
             error = await runAction(
-                transferCommunity(user.id, communityId, login),
+                transferCommunity(user.id, communityId, discordId),
             );
             break;
         case "remove-override":
@@ -207,8 +209,8 @@ const isOwner = current.role === "owner";
                 <form method="post" class="mb-4 flex gap-2">
                     <input type="hidden" name="intent" value="invite" />
                     <input
-                        name="githubLogin"
-                        placeholder="GitHub username"
+                        name="discordId"
+                        placeholder="Discord user ID"
                         required
                         class="rounded bg-slate-800 p-2"
                     />
@@ -229,11 +231,11 @@ const isOwner = current.role === "owner";
                         />
                         <input
                             type="hidden"
-                            name="githubLogin"
-                            value={i.githubLogin}
+                            name="discordId"
+                            value={i.discordId}
                         />
                         <span>
-                            {i.githubLogin} ({i.role})
+                            {i.discordId} ({i.role})
                         </span>
                         <button class="text-red-400">Cancel</button>
                     </form>
@@ -341,8 +343,8 @@ const isOwner = current.role === "owner";
                 <form method="post" class="flex gap-2">
                     <input type="hidden" name="intent" value="transfer" />
                     <input
-                        name="githubLogin"
-                        placeholder="GitHub username"
+                        name="discordId"
+                        placeholder="Discord user ID"
                         required
                         class="rounded bg-slate-800 p-2"
                     />

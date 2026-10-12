@@ -3,7 +3,7 @@ import { migrate } from 'drizzle-orm/libsql/migrator';
 import { Effect, Layer } from 'effect';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { makeDatabase, type Database } from '../db/client';
-import { community, communityMember, punishment, server, user } from '../db/schema';
+import { account, community, communityMember, punishment, server, user } from '../db/schema';
 import { createCommunity, listCommunities, registerServer } from './dashboard';
 import { Db } from './db';
 import { inviteMember, listMembers, respondInvite } from './membership';
@@ -25,6 +25,11 @@ const PLAYER = '33333333-3333-4333-8333-333333333333';
 let db: Database;
 const run = <A, E>(e: Effect.Effect<A, E, Db>) => Effect.runPromise(e.pipe(Effect.provide(Layer.succeed(Db, db))));
 const fails = (e: Effect.Effect<unknown, unknown, Db>) => expect(run(e)).rejects.toBeDefined();
+const discordId = (id: string) => ({
+    owner: '10000000000000001',
+    member: '10000000000000002',
+    outsider: '10000000000000003',
+})[id]!;
 const roleOf = async (userId: string, communityId: string) =>
     (await run(listMembers('owner', communityId))).find((m) => m.userId === userId)?.role;
 const serverRow = async (uuid: string) => (await db.select().from(server).where(eq(server.uuid, uuid)))[0];
@@ -40,21 +45,30 @@ beforeEach(async () => {
             id,
             name: id,
             email: `${id}@x.test`,
-            githubLogin: `gh-${id}`,
+            createdAt: now,
+            updatedAt: now,
+        })),
+    );
+    await db.insert(account).values(
+        ['owner', 'member', 'outsider'].map((id) => ({
+            id: `discord-${id}`,
+            accountId: discordId(id),
+            providerId: 'discord',
+            userId: id,
             createdAt: now,
             updatedAt: now,
         })),
     );
     await run(createCommunity('owner', 'one'));
     c1 = (await run(listCommunities('owner')))[0]!.id;
-    await run(inviteMember('owner', c1, 'gh-member', 'member'));
-    await run(respondInvite({ id: 'member', githubLogin: 'gh-member' }, c1, true));
+    await run(inviteMember('owner', c1, discordId('member'), 'member'));
+    await run(respondInvite({ id: 'member' }, c1, true));
 });
 
 describe('server ownership', () => {
     it('changes owner only after the recipient accepts', async () => {
         await run(registerServer('owner', S1, 'srv', c1));
-        await run(transferServer('owner', S1, '@GH-member'));
+        await run(transferServer('owner', S1, discordId('member')));
         expect((await serverRow(S1))?.ownerUserId).toBe('owner');
         await run(respondTransfer('member', 'server', S1, true));
         const row = await serverRow(S1);
@@ -64,7 +78,7 @@ describe('server ownership', () => {
 
     it('detaches the server when the new owner is not in its community', async () => {
         await run(registerServer('owner', S1, 'srv', c1));
-        await run(transferServer('owner', S1, 'gh-outsider'));
+        await run(transferServer('owner', S1, discordId('outsider')));
         await run(respondTransfer('outsider', 'server', S1, true));
         const row = await serverRow(S1);
         expect(row?.ownerUserId).toBe('outsider');
@@ -73,8 +87,8 @@ describe('server ownership', () => {
 
     it('lets only the owner offer, only the recipient answer, and the sender cancel', async () => {
         await run(registerServer('owner', S1, 'srv', null));
-        await fails(transferServer('member', S1, 'gh-outsider'));
-        await run(transferServer('owner', S1, 'gh-member'));
+        await fails(transferServer('member', S1, discordId('outsider')));
+        await run(transferServer('owner', S1, discordId('member')));
         await run(respondTransfer('outsider', 'server', S1, true));
         expect((await serverRow(S1))?.ownerUserId).toBe('owner');
         expect((await run(listTransfers('owner'))).outgoing).toHaveLength(1);
@@ -119,9 +133,9 @@ describe('server ownership', () => {
 
 describe('community ownership', () => {
     it('only transfers to an existing member, who becomes owner while the old owner becomes admin', async () => {
-        await fails(transferCommunity('owner', c1, 'gh-outsider'));
-        await fails(transferCommunity('member', c1, 'gh-owner'));
-        await run(transferCommunity('owner', c1, 'gh-member'));
+        await fails(transferCommunity('owner', c1, discordId('outsider')));
+        await fails(transferCommunity('member', c1, discordId('owner')));
+        await run(transferCommunity('owner', c1, discordId('member')));
         await run(respondTransfer('member', 'community', c1, true));
         expect(await roleOf('member', c1)).toBe('owner');
         expect(await roleOf('owner', c1)).toBe('admin');
@@ -129,7 +143,7 @@ describe('community ownership', () => {
     });
 
     it('drops the transfer if the recipient left before accepting', async () => {
-        await run(transferCommunity('owner', c1, 'gh-member'));
+        await run(transferCommunity('owner', c1, discordId('member')));
         await db.delete(communityMember).where(eq(communityMember.userId, 'member'));
         await run(respondTransfer('member', 'community', c1, true));
         expect((await db.select().from(community).where(eq(community.id, c1)))[0]?.ownerUserId).toBe('owner');

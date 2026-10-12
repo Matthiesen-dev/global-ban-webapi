@@ -6,13 +6,14 @@ import {
     communityMember,
     communitySubscription,
     server,
+    account,
     user,
 } from '../db/schema';
-import { getRole, outranks, query, requireRole } from './access';
+import { getRole, outranks, query, requireRole, type Executor } from './access';
 import { Forbidden } from './errors';
 
-const normLogin = (login: string) => login.trim().replace(/^@/, '').toLowerCase();
-const GITHUB_LOGIN = /^[a-z\d](?:[a-z\d-]{0,38})$/;
+const normalizeDiscordId = (id: string) => id.trim();
+const DISCORD_ID = /^\d{17,20}$/;
 
 export const listMembers = (actorId: string, communityId: string) =>
     query(async (db) => {
@@ -57,19 +58,19 @@ export const setRole = (actorId: string, communityId: string, targetId: string, 
             .where(and(eq(communityMember.communityId, communityId), eq(communityMember.userId, targetId)));
     });
 
-export const inviteMember = (actorId: string, communityId: string, githubLogin: string, role: 'admin' | 'member') =>
+export const inviteMember = (actorId: string, communityId: string, discordId: string, role: 'admin' | 'member') =>
     query(async (db) => {
         const actor = await requireRole(db, actorId, communityId, 'admin');
         if (role === 'admin' && actor !== 'owner') {
             throw new Forbidden({ message: 'Only the owner can invite admins' });
         }
-        const login = normLogin(githubLogin);
-        if (!GITHUB_LOGIN.test(login)) throw new Forbidden({ message: 'Enter a valid GitHub username' });
+        const id = normalizeDiscordId(discordId);
+        if (!DISCORD_ID.test(id)) throw new Forbidden({ message: 'Enter a valid Discord user ID' });
         await db
             .insert(communityInvite)
-            .values({ communityId, githubLogin: login, role, invitedByUserId: actorId, createdAt: new Date() })
+            .values({ communityId, discordId: id, role, invitedByUserId: actorId, createdAt: new Date() })
             .onConflictDoUpdate({
-                target: [communityInvite.communityId, communityInvite.githubLogin],
+                target: [communityInvite.communityId, communityInvite.discordId],
                 set: { role, invitedByUserId: actorId },
             });
     });
@@ -78,46 +79,55 @@ export const listCommunityInvites = (actorId: string, communityId: string) =>
     query(async (db) => {
         await requireRole(db, actorId, communityId, 'admin');
         return db
-            .select({ githubLogin: communityInvite.githubLogin, role: communityInvite.role })
+            .select({ discordId: communityInvite.discordId, role: communityInvite.role })
             .from(communityInvite)
             .where(eq(communityInvite.communityId, communityId));
     });
 
-export const cancelInvite = (actorId: string, communityId: string, githubLogin: string) =>
+export const cancelInvite = (actorId: string, communityId: string, discordId: string) =>
     query(async (db) => {
         await requireRole(db, actorId, communityId, 'admin');
         await db
             .delete(communityInvite)
             .where(
-                and(eq(communityInvite.communityId, communityId), eq(communityInvite.githubLogin, normLogin(githubLogin))),
+                and(eq(communityInvite.communityId, communityId), eq(communityInvite.discordId, normalizeDiscordId(discordId))),
             );
     });
 
-type Account = { id: string; githubLogin?: string | null };
+type Account = { id: string };
+
+const findDiscordId = async (db: Executor, userId: string) => {
+    const [row] = await db
+        .select({ discordId: account.accountId })
+        .from(account)
+        .where(and(eq(account.userId, userId), eq(account.providerId, 'discord')));
+    return row?.discordId;
+};
 
 export const listMyInvites = (me: Account) =>
     query(async (db) => {
-        if (!me.githubLogin) return [];
+        const discordId = await findDiscordId(db, me.id);
+        if (!discordId) return [];
         return db
             .select({ communityId: communityInvite.communityId, communityName: community.name, role: communityInvite.role })
             .from(communityInvite)
             .innerJoin(community, eq(community.id, communityInvite.communityId))
-            .where(eq(communityInvite.githubLogin, me.githubLogin));
+            .where(eq(communityInvite.discordId, discordId));
     });
 
 export const respondInvite = (me: Account, communityId: string, accept: boolean) =>
     query(async (db) => {
-        if (!me.githubLogin) return;
-        const login = me.githubLogin;
+        const discordId = await findDiscordId(db, me.id);
+        if (!discordId) return;
         const [invite] = await db
             .select()
             .from(communityInvite)
-            .where(and(eq(communityInvite.communityId, communityId), eq(communityInvite.githubLogin, login)));
+            .where(and(eq(communityInvite.communityId, communityId), eq(communityInvite.discordId, discordId)));
         if (!invite) return;
         await db.transaction(async (tx) => {
             await tx
                 .delete(communityInvite)
-                .where(and(eq(communityInvite.communityId, communityId), eq(communityInvite.githubLogin, login)));
+                .where(and(eq(communityInvite.communityId, communityId), eq(communityInvite.discordId, discordId)));
             if (accept) {
                 await tx
                     .insert(communityMember)

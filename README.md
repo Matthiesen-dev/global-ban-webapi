@@ -2,7 +2,7 @@
 
 The web API and dashboard for the [Global Ban](https://github.com/Matthiesen-dev/global-ban) Minecraft mod. Servers sync punishments to and from it with a single POST request, and server owners manage servers, communities and members in the dashboard.
 
-Built with Astro (SSR, Node adapter), Effect v4, Drizzle on libSQL/SQLite, better-auth (GitHub sign-in) and Tailwind.
+Built with Astro (SSR, Node adapter), Effect v4, Drizzle on libSQL/SQLite, better-auth (Discord sign-in) and Tailwind.
 
 ## Getting started
 
@@ -23,7 +23,7 @@ astro dev
 | `DATABASE_AUTH_TOKEN` | Auth token for remote libSQL (leave empty for a local file) |
 | `BETTER_AUTH_SECRET` | Long random secret used to sign sessions |
 | `BETTER_AUTH_URL` | Public base URL of this app |
-| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | GitHub OAuth app credentials. Set the callback URL to `<BETTER_AUTH_URL>/api/auth/callback/github` |
+| `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | Discord OAuth app credentials. Set the redirect URI to `<BETTER_AUTH_URL>/api/auth/callback/discord` |
 | `TRUSTED_PROXY` | `none` (default), `traefik` or `cloudflare`. Selects which header carries the client IP for rate limiting |
 | `TRUSTED_PROXY_HOPS` | Number of trusted proxies that append to `X-Forwarded-For` (default `1`, used by `traefik`) |
 
@@ -40,7 +40,7 @@ astro dev
 
 ## Connecting a Minecraft server
 
-1. Sign in to the dashboard with GitHub.
+1. Sign in to the dashboard with Discord.
 2. Open **Servers** and register the server using the UUID from the mod's server config. Treat this UUID as a secret: it is the only credential the mod sends.
 3. Assign the server to a community. A server that is not in a community receives `403` from the sync endpoint.
 4. In the mod's config, set `scheduler_apiSyncUrl` to `<your-host>/api/v1/sync`.
@@ -119,7 +119,7 @@ If the expected header is missing or not a valid IP, the connection address is u
 
 - **Servers:** register, move between communities, transfer or delete. Last sync time is shown per server.
 - **Communities:** create communities, request to join, accept invites, subscribe to other communities.
-- **Community page:** members and roles, invites by GitHub username, join requests, subscription approvals, ownership transfer and deletion.
+- **Community page:** members and roles, invites by Discord user ID, join requests, subscription approvals, ownership transfer and deletion.
 - **Punishments:** punishments from your communities, with player IPs always masked. Admins can revoke.
 - **Appeals:** appeals sent to communities you administer. See [Appeals](#appeals).
 - **Transfers:** accept, decline or cancel ownership offers.
@@ -134,7 +134,7 @@ New accounts only see their own servers and communities.
 | Admin | Invite members, approve join requests, remove members, approve subscriptions, revoke punishments, decide appeals and manage ban overrides |
 | Member | View members and punishments, add their own servers, leave |
 
-- Invites are tied to a GitHub username and can only be accepted by that GitHub account.
+- Invites are tied to an immutable Discord user ID and can only be accepted by the linked Discord account. Users can copy their ID from Discord with Developer Mode enabled.
 - A subscription lets one community receive another's punishments. It stays pending until an admin of the source community approves it, and sync ignores pending ones.
 - Removing a member detaches their servers from the community.
 - Ownership transfers need the recipient to accept. A transferred server leaves its community if the new owner is not a member of it.

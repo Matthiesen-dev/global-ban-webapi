@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "1b47b5bb-bedf-402b-ad3c-da7e2622c61a",
+  "id": "5b16d31a-086e-48e4-b37d-824fbe7a6717",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -399,8 +399,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "github_login": {
-          "name": "github_login",
+        "discord_id": {
+          "name": "discord_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -458,12 +458,12 @@
         }
       },
       "compositePrimaryKeys": {
-        "community_invite_community_id_github_login_pk": {
+        "community_invite_community_id_discord_id_pk": {
           "columns": [
             "community_id",
-            "github_login"
+            "discord_id"
           ],
-          "name": "community_invite_community_id_github_login_pk"
+          "name": "community_invite_community_id_discord_id_pk"
         }
       },
       "uniqueConstraints": {},
@@ -1329,13 +1329,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "github_login": {
-          "name": "github_login",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -1356,13 +1349,6 @@
           "name": "user_email_unique",
           "columns": [
             "email"
-          ],
-          "isUnique": true
-        },
-        "user_github_login_unique": {
-          "name": "user_github_login_unique",
-          "columns": [
-            "github_login"
           ],
           "isUnique": true
         }

@@ -42,12 +42,12 @@ export default defineConfig({
                 access: "secret",
                 optional: false,
             }),
-            GITHUB_CLIENT_ID: envField.string({
+            DISCORD_CLIENT_ID: envField.string({
                 context: "server",
                 access: "secret",
                 optional: false,
             }),
-            GITHUB_CLIENT_SECRET: envField.string({
+            DISCORD_CLIENT_SECRET: envField.string({
                 context: "server",
                 access: "secret",
                 optional: false,

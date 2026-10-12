@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { Effect, Layer } from 'effect';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { makeDatabase, type Database } from '../db/client';
-import { communitySubscription, server, user } from '../db/schema';
+import { account, communitySubscription, server, user } from '../db/schema';
 import { Db } from './db';
 import { assignServer, createCommunity, listCommunities, registerServer, subscribe } from './dashboard';
 import {
@@ -22,7 +22,14 @@ const SERVER = '11111111-1111-4111-8111-111111111111';
 let db: Database;
 const run = <A, E>(e: Effect.Effect<A, E, Db>) => Effect.runPromise(e.pipe(Effect.provide(Layer.succeed(Db, db))));
 const fails = (e: Effect.Effect<unknown, unknown, Db>) => expect(run(e)).rejects.toBeDefined();
-const account = (id: string) => ({ id, githubLogin: `gh-${id}` });
+const accountFor = (id: string) => ({ id });
+const discordId = (id: string) => ({
+    owner: '10000000000000001',
+    admin: '10000000000000002',
+    member: '10000000000000003',
+    outsider: '10000000000000004',
+    other: '10000000000000005',
+})[id]!;
 const roleOf = async (userId: string, communityId: string) =>
     (await run(listMembers('owner', communityId))).find((m) => m.userId === userId)?.role;
 
@@ -37,17 +44,26 @@ beforeEach(async () => {
             id,
             name: id,
             email: `${id}@x.test`,
-            githubLogin: `gh-${id}`,
+            createdAt: now,
+            updatedAt: now,
+        })),
+    );
+    await db.insert(account).values(
+        ['owner', 'admin', 'member', 'outsider', 'other'].map((id) => ({
+            id: `discord-${id}`,
+            accountId: discordId(id),
+            providerId: 'discord',
+            userId: id,
             createdAt: now,
             updatedAt: now,
         })),
     );
     await run(createCommunity('owner', 'one'));
     c1 = (await run(listCommunities('owner')))[0]!.id;
-    await run(inviteMember('owner', c1, '@GH-admin', 'admin'));
-    await run(respondInvite(account('admin'), c1, true));
-    await run(inviteMember('admin', c1, 'gh-member', 'member'));
-    await run(respondInvite(account('member'), c1, true));
+    await run(inviteMember('owner', c1, discordId('admin'), 'admin'));
+    await run(respondInvite(accountFor('admin'), c1, true));
+    await run(inviteMember('admin', c1, discordId('member'), 'member'));
+    await run(respondInvite(accountFor('member'), c1, true));
 });
 
 describe('membership', () => {
@@ -57,28 +73,28 @@ describe('membership', () => {
     });
 
     it('blocks non-members and plain members from managing', async () => {
-        await fails(inviteMember('outsider', c1, 'gh-other', 'member'));
-        await fails(inviteMember('member', c1, 'gh-other', 'member'));
+        await fails(inviteMember('outsider', c1, discordId('other'), 'member'));
+        await fails(inviteMember('member', c1, discordId('other'), 'member'));
         await fails(listMembers('outsider', c1));
     });
 
     it('only lets the owner invite admins or change roles', async () => {
-        await fails(inviteMember('admin', c1, 'gh-other', 'admin'));
+        await fails(inviteMember('admin', c1, discordId('other'), 'admin'));
         await fails(setRole('admin', c1, 'member', 'admin'));
         await run(setRole('owner', c1, 'member', 'admin'));
         expect(await roleOf('member', c1)).toBe('admin');
     });
 
-    it('only lets the invited GitHub account redeem an invite', async () => {
-        await run(inviteMember('owner', c1, 'gh-other', 'member'));
-        await run(respondInvite(account('outsider'), c1, true));
+    it('only lets the invited Discord account redeem an invite', async () => {
+        await run(inviteMember('owner', c1, discordId('other'), 'member'));
+        await run(respondInvite(accountFor('outsider'), c1, true));
         expect(await roleOf('outsider', c1)).toBeUndefined();
-        await run(respondInvite(account('other'), c1, true));
+        await run(respondInvite(accountFor('other'), c1, true));
         expect(await roleOf('other', c1)).toBe('member');
     });
 
-    it('rejects malformed GitHub usernames', async () => {
-        await fails(inviteMember('owner', c1, 'not a user!', 'member'));
+    it('rejects malformed Discord IDs', async () => {
+        await fails(inviteMember('owner', c1, 'not-a-discord-id', 'member'));
     });
 
     it('needs admin approval for join requests', async () => {

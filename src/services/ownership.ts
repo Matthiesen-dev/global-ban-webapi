@@ -9,25 +9,31 @@ import {
     punishment,
     punishmentDelivery,
     server,
+    account,
     user,
 } from '../db/schema';
 import { getRole, query, requireRole, type Executor } from './access';
 import { Forbidden } from './errors';
 
-const normLogin = (login: string) => login.trim().replace(/^@/, '').toLowerCase();
+const DISCORD_ID = /^\d{17,20}$/;
 const denied = () => new Forbidden({ message: 'You do not have permission to do that' });
 
-const findUserByLogin = async (db: Executor, login: string) => {
-    const [row] = await db.select({ id: user.id }).from(user).where(eq(user.githubLogin, normLogin(login)));
-    if (!row) throw new Forbidden({ message: 'No signed-in user has that GitHub username' });
-    return row.id;
+const findUserByDiscordId = async (db: Executor, discordId: string) => {
+    const id = discordId.trim();
+    if (!DISCORD_ID.test(id)) throw new Forbidden({ message: 'Enter a valid Discord user ID' });
+    const [row] = await db
+        .select({ userId: account.userId })
+        .from(account)
+        .where(and(eq(account.providerId, 'discord'), eq(account.accountId, id)));
+    if (!row) throw new Forbidden({ message: 'No signed-in user has that Discord ID' });
+    return row.userId;
 };
 
-export const transferServer = (actorId: string, uuid: string, githubLogin: string) =>
+export const transferServer = (actorId: string, uuid: string, discordId: string) =>
     query(async (db) => {
         const [row] = await db.select({ owner: server.ownerUserId }).from(server).where(eq(server.uuid, uuid));
         if (!row || row.owner !== actorId) throw denied();
-        const toUserId = await findUserByLogin(db, githubLogin);
+        const toUserId = await findUserByDiscordId(db, discordId);
         if (toUserId === actorId) throw new Forbidden({ message: 'You already own this server' });
         await db
             .insert(ownershipTransfer)
@@ -38,10 +44,10 @@ export const transferServer = (actorId: string, uuid: string, githubLogin: strin
             });
     });
 
-export const transferCommunity = (actorId: string, communityId: string, githubLogin: string) =>
+export const transferCommunity = (actorId: string, communityId: string, discordId: string) =>
     query(async (db) => {
         await requireRole(db, actorId, communityId, 'owner');
-        const toUserId = await findUserByLogin(db, githubLogin);
+        const toUserId = await findUserByDiscordId(db, discordId);
         if (toUserId === actorId) throw new Forbidden({ message: 'You already own this community' });
         if (!(await getRole(db, toUserId, communityId))) {
             throw new Forbidden({ message: 'The new owner must already be a member of the community' });

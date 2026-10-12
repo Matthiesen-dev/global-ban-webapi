@@ -12,7 +12,7 @@ if (Astro.locals.user) return Astro.redirect("/dashboard/servers");
 	<button
 		id="login"
 		class="rounded bg-slate-100 px-4 py-2 font-medium text-slate-900"
-		>Sign in with GitHub</button
+		>Sign in with Discord</button
 	>
 	<p class="mt-6 text-slate-400">
 		Banned and think it was a mistake?
@@ -23,7 +23,7 @@ if (Astro.locals.user) return Astro.redirect("/dashboard/servers");
 		const client = createAuthClient();
 		document.getElementById("login")?.addEventListener("click", () => {
 			client.signIn.social({
-				provider: "github",
+				provider: "discord",
 				callbackURL: "/dashboard/servers",
 			});
 		});

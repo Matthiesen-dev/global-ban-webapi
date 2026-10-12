@@ -24,11 +24,7 @@ if (Astro.request.method === "POST") {
         error = await runAction(assignServer(user.id, uuid, communityId));
     } else if (form.get("intent") === "transfer") {
         error = await runAction(
-            transferServer(
-                user.id,
-                uuid,
-                String(form.get("githubLogin") ?? ""),
-            ),
+            transferServer(user.id, uuid, String(form.get("discordId") ?? "")),
         );
     } else if (form.get("intent") === "delete") {
         error = await runAction(
@@ -141,8 +137,8 @@ const fmt = (d: Date | null) => (d ? d.toLocaleString() : "never");
                                         value={s.uuid}
                                     />
                                     <input
-                                        name="githubLogin"
-                                        placeholder="GitHub username"
+                                        name="discordId"
+                                        placeholder="Discord user ID"
                                         required
                                         class="rounded bg-slate-800 p-1"
                                     />
