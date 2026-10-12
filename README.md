@@ -4,6 +4,8 @@ The web API and dashboard for the [Global Ban](https://github.com/Matthiesen-dev
 
 Built with Astro (SSR, Node adapter), Effect v4, Drizzle on libSQL/SQLite, better-auth (Discord sign-in) and Tailwind.
 
+> For a public instance available to anyone check out https://global-ban.matthiesen.dev
+
 ## Getting started
 
 Requires Node 22.12+ and pnpm.
