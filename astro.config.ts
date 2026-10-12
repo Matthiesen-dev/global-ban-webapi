@@ -1,20 +1,14 @@
 import node from '@astrojs/node';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig, envField } from 'astro/config';
-import { loadEnv } from "vite";
-
-const { BASE_DOMAIN } = loadEnv(process.env.NODE_ENV ?? 'development', process.cwd(), "");
-
-// Change this to your production domain when deploying
-const baseDomain = BASE_DOMAIN ?? 'example.com';
 
 // https://astro.build/config
 export default defineConfig({
-    site: 'https://' + baseDomain,
+    site: 'https://global-ban.matthiesen.dev',
     security: {
         allowedDomains: [
-            { hostname: baseDomain },
-            { hostname: `*.${baseDomain}` },
+            { hostname: 'global-ban.matthiesen.dev' },
+            { hostname: `*.global-ban.matthiesen.dev` },
         ]
     },
     output: 'server',
