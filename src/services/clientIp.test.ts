@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeIp, proxyConfigFromEnv, resolveClientIp } from './clientIp';
+import { normalizeIp, resolveClientIp } from './clientIp';
 
 const h = (init: Record<string, string>) => new Headers(init);
 const none = { mode: 'none', hops: 1 } as const;
 const traefik = { mode: 'traefik', hops: 1 } as const;
 const cloudflare = { mode: 'cloudflare', hops: 1 } as const;
-const getSecretForTest = (secrets: Record<string, string | undefined>) => (key: string) => secrets[key];
 
 describe('resolveClientIp', () => {
     it('ignores proxy headers when no proxy is configured', () => {
@@ -47,17 +46,5 @@ describe('normalizeIp', () => {
         expect(normalizeIp('2001:db8:85a3:1:aaaa:bbbb:cccc:dddd')).toBe('2001:db8:85a3:1::/64');
         expect(normalizeIp('2001:0db8::1')).toBe('2001:db8:0:0::/64');
         expect(normalizeIp('2001:db8:0:0:1::7')).toBe('2001:db8:0:0::/64');
-    });
-});
-
-describe('proxyConfigFromEnv', () => {
-    it('defaults to no proxy', () => {
-        expect(proxyConfigFromEnv(getSecretForTest({}))).toEqual({ mode: 'none', hops: 1 });
-    });
-
-    it('parses valid values and rejects invalid ones', () => {
-        expect(proxyConfigFromEnv(getSecretForTest({ TRUSTED_PROXY: 'Cloudflare', TRUSTED_PROXY_HOPS: '2' }))).toEqual({ mode: 'cloudflare', hops: 2 });
-        expect(() => proxyConfigFromEnv(getSecretForTest({ TRUSTED_PROXY: 'nginx' }))).toThrow();
-        expect(() => proxyConfigFromEnv(getSecretForTest({ TRUSTED_PROXY_HOPS: '0' }))).toThrow();
     });
 });

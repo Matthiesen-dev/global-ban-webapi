@@ -2,19 +2,22 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { makeDatabase } from './db/client';
 import * as schema from './db/schema';
-import { DATABASE_URL, DATABASE_AUTH_TOKEN, DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, BETTER_AUTH_URL } from 'astro:env/server';
 import { discordProfileToUser } from './authProfile';
+import { getAuthEnv } from './services/env';
+import { runtime } from './runtime';
+
+const env = await runtime.runPromise(getAuthEnv);
 
 export const auth = betterAuth({
-    database: drizzleAdapter(makeDatabase(DATABASE_URL ?? 'file:local.db', DATABASE_AUTH_TOKEN), {
+    database: drizzleAdapter(makeDatabase(env.DATABASE_URL, env.DATABASE_AUTH_TOKEN), {
         provider: 'sqlite',
         schema,
     }),
-    baseURL: BETTER_AUTH_URL,
+    baseURL: env.BETTER_AUTH_URL,
     socialProviders: {
         discord: {
-            clientId: DISCORD_CLIENT_ID ?? '',
-            clientSecret: DISCORD_CLIENT_SECRET ?? '',
+            clientId: env.DISCORD_CLIENT_ID,
+            clientSecret: env.DISCORD_CLIENT_SECRET,
             overrideUserInfoOnSignIn: true,
             mapProfileToUser: discordProfileToUser,
         },

@@ -1,4 +1,6 @@
 import { isIP } from 'node:net';
+import { getProxyConfig } from './env';
+import { runtime } from '../runtime';
 
 export type ProxyMode = 'none' | 'traefik' | 'cloudflare';
 
@@ -8,14 +10,8 @@ export interface ProxyConfig {
     readonly hops: number;
 }
 
-export const proxyConfigFromEnv = (getSecret: typeof import("astro:env/server")['getSecret']): ProxyConfig => {
-    const mode = (getSecret('TRUSTED_PROXY') ?? 'none').trim().toLowerCase();
-    if (mode !== 'none' && mode !== 'traefik' && mode !== 'cloudflare') {
-        throw new Error(`TRUSTED_PROXY must be one of none, traefik, cloudflare (got "${mode}")`);
-    }
-    const hops = Number(getSecret('TRUSTED_PROXY_HOPS') ?? 1);
-    if (!Number.isInteger(hops) || hops < 1) throw new Error('TRUSTED_PROXY_HOPS must be a positive integer');
-    return { mode, hops };
+export const proxyConfigFromEnv = async (): Promise<ProxyConfig> => {
+    return await runtime.runPromise(getProxyConfig);
 };
 
 const clean = (value: string | null | undefined) => {
