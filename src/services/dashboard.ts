@@ -1,7 +1,11 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
+import { Effect, Schema } from 'effect';
 import { maskIp } from '../domain/mask';
 import { community, communityMember, communitySubscription, punishment, server } from '../db/schema';
+import { isExpired, type PunishmentRecord } from '../domain/punishment';
 import { query, requireRole } from './access';
+import { Forbidden, InvalidPayload } from './errors';
+import { VanillaIpBansToPunishment, VanillaPlayerBansToPunishment } from './mc-ban-importers';
 
 export const listServers = (userId: string) =>
     query((db) =>
@@ -95,4 +99,49 @@ export const revokePunishment = (userId: string, punishmentId: string) =>
         if (!row) return;
         await requireRole(db, userId, row.communityId, 'admin');
         await db.update(punishment).set({ revokedAt: new Date(), revokedByUserId: userId }).where(eq(punishment.id, punishmentId));
+    });
+
+const decodeBanList = (name: string, text: string | undefined, schema: Schema.Decoder<ReadonlyArray<PunishmentRecord>>) =>
+    Effect.gen(function* () {
+        if (!text?.trim()) return [];
+        const raw = yield* Effect.try({
+            try: () => JSON.parse(text) as unknown,
+            catch: () => new InvalidPayload({ message: `${name} is not valid JSON` }),
+        });
+        return yield* Schema.decodeUnknownEffect(schema)(raw).pipe(
+            Effect.mapError(() => new InvalidPayload({ message: `${name} is not a valid Minecraft ban list` })),
+        );
+    });
+
+/** Imports vanilla ban lists into the community of a server the user owns; returns the number of new bans. */
+export const importBans = (userId: string, serverUuid: string, playersJson?: string, ipsJson?: string) =>
+    Effect.gen(function* () {
+        const communityId = yield* query(async (db) => {
+            const [row] = await db
+                .select({ communityId: server.communityId })
+                .from(server)
+                .where(and(eq(server.uuid, serverUuid), eq(server.ownerUserId, userId)));
+            if (!row?.communityId) throw new Forbidden({ message: 'You do not have permission to do that' });
+            await requireRole(db, userId, row.communityId, 'admin');
+            return row.communityId;
+        });
+        const records = [
+            ...(yield* decodeBanList('banned_players.json', playersJson, VanillaPlayerBansToPunishment(serverUuid))),
+            ...(yield* decodeBanList('banned_ips.json', ipsJson, VanillaIpBansToPunishment(serverUuid))),
+        ];
+        const now = new Date();
+        const live = records.filter((r) => !isExpired(r, now.getTime()));
+        return yield* query(async (db) => {
+            let imported = 0;
+            await db.transaction(async (tx) => {
+                for (const r of live) {
+                    const res = await tx
+                        .insert(punishment)
+                        .values({ id: crypto.randomUUID(), communityId, originServerUuid: serverUuid, ...r, createdAt: now })
+                        .onConflictDoNothing();
+                    imported += res.rowsAffected;
+                }
+            });
+            return imported;
+        });
     });

@@ -1,23 +1,94 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import { runAction, runtime } from "../../runtime";
-import { listPunishments, revokePunishment } from "../../services/dashboard";
+import { Effect } from "effect";
+import {
+    importBans,
+    listPunishments,
+    listServers,
+    revokePunishment,
+} from "../../services/dashboard";
+
+const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
 
 const user = Astro.locals.user!;
 let error: string | null = null;
+const imported = Number(Astro.url.searchParams.get("imported"));
+const importedMessage = Astro.url.searchParams.has("imported") && Number.isInteger(imported) && imported >= 0
+    ? `Imported ${imported} ban${imported === 1 ? "" : "s"}`
+    : null;
 
 if (Astro.request.method === "POST") {
     const form = await Astro.request.formData();
-    error = await runAction(revokePunishment(user.id, String(form.get("id"))));
-    if (!error) return Astro.redirect(Astro.url.pathname);
+    if (form.get("action") === "import") {
+        const readFile = async (key: string) => {
+            const f = form.get(key);
+            if (!(f instanceof File) || f.size === 0) return undefined;
+            if (f.size > MAX_IMPORT_BYTES) throw new Error(`${f.name} is too large`);
+            return f.text();
+        };
+        try {
+            const players = await readFile("players");
+            const ips = await readFile("ips");
+            if (players === undefined && ips === undefined) {
+                error = "Choose at least one file to import";
+            } else {
+                let count = 0;
+                error = await runAction(
+                    importBans(user.id, String(form.get("server")), players, ips).pipe(
+                        Effect.tap((n) => Effect.sync(() => { count = n; })),
+                    ),
+                );
+                if (!error) return Astro.redirect(`${Astro.url.pathname}?imported=${count}`);
+            }
+        } catch (e) {
+            error = e instanceof Error ? e.message : "Could not read the uploaded files";
+        }
+    } else {
+        error = await runAction(revokePunishment(user.id, String(form.get("id"))));
+        if (!error) return Astro.redirect(Astro.url.pathname);
+    }
 }
 
 const punishments = await runtime.runPromise(listPunishments(user.id));
+const importableServers = (await runtime.runPromise(listServers(user.id))).filter((s) => s.communityId);
 ---
 
 <Layout title="Punishments">
     <h1 class="mb-4 text-2xl font-bold">Punishments</h1>
     {error && <p class="mb-4 rounded bg-red-900 p-2">{error}</p>}
+    {importedMessage && <p class="mb-4 rounded bg-green-900 p-2">{importedMessage}</p>}
+    <details class="mb-6">
+        <summary class="cursor-pointer text-slate-300">Import bans from a Minecraft server</summary>
+        {
+            importableServers.length === 0 ? (
+                <p class="mt-2 text-sm text-slate-400">
+                    Register a server and assign it to a community before importing.
+                </p>
+            ) : (
+                <form method="post" enctype="multipart/form-data" class="mt-2 space-y-2 text-sm">
+                    <input type="hidden" name="action" value="import" />
+                    <label class="block">
+                        Server
+                        <select name="server" required class="ml-2 rounded bg-slate-800 p-1">
+                            {importableServers.map((s) => (
+                                <option value={s.uuid}>{s.name} ({s.communityName})</option>
+                            ))}
+                        </select>
+                    </label>
+                    <label class="block">
+                        banned_players.json
+                        <input type="file" name="players" accept=".json,application/json" class="ml-2" />
+                    </label>
+                    <label class="block">
+                        banned_ips.json
+                        <input type="file" name="ips" accept=".json,application/json" class="ml-2" />
+                    </label>
+                    <button class="rounded bg-indigo-600 px-3 py-1 hover:bg-indigo-500">Import</button>
+                </form>
+            )
+        }
+    </details>
     <table class="w-full text-left text-sm">
         <thead class="text-slate-400">
             <tr

@@ -13,6 +13,15 @@ export const Uuid = Schema.String.check(Schema.isUUID());
 /** duration value meaning the punishment never expires. */
 export const NON_EXPIRING_PUNISHMENT = -1;
 
+/** The punisher UUID is unknown or not applicable. */
+export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
+/** The player display name is unknown or not applicable. */
+export const UNKNOWN_PLAYER = 'UnknownPlayer';
+
+/** The player IP is unknown or not applicable. */
+export const UNDEFINED_IP = 'undefined';
+
 /** Only these types are synced through the API and appealable; KICK stays mod-side. */
 export const APPEALABLE_TYPES = ['BAN', 'IP_BAN'] as const;
 

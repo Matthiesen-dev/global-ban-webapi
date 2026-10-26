@@ -1,6 +1,4 @@
 import { isIP } from 'node:net';
-import { getProxyConfig } from './env';
-import { runtime } from '../runtime';
 
 export type ProxyMode = 'none' | 'traefik' | 'cloudflare';
 
@@ -9,10 +7,6 @@ export interface ProxyConfig {
     /** Trusted proxies between the client and this app that append to X-Forwarded-For. */
     readonly hops: number;
 }
-
-export const proxyConfigFromEnv = async (): Promise<ProxyConfig> => {
-    return await runtime.runPromise(getProxyConfig);
-};
 
 const clean = (value: string | null | undefined) => {
     const v = value?.trim();
