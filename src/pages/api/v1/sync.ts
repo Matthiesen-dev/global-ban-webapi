@@ -68,3 +68,5 @@ export const POST: APIRoute = ({ request, clientAddress }) => {
     } catch { }
     return runtime.runPromise(handle(request, resolveClientIp(proxyConfig, request.headers, socketIp)));
 };
+
+export const GET: APIRoute = () => new Response('Method not allowed', { status: 405 });
