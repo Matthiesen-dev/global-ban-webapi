@@ -1,7 +1,8 @@
 import { Effect, Layer, ManagedRuntime } from 'effect';
-import { proxyConfigFromEnv, resolveClientIp } from './services/clientIp';
+import { resolveClientIp } from './services/clientIp';
+import { getProxyConfig } from './services/env';
 import { DbLive, type Db } from './services/db';
-import type { DatabaseError, Forbidden } from './services/errors';
+import type { DatabaseError, Forbidden, InvalidPayload } from './services/errors';
 import { RateLimiterLive, type RateLimited, type RateLimiter } from './services/rateLimit';
 
 export const runtime = ManagedRuntime.make(
@@ -12,12 +13,13 @@ export const runtime = ManagedRuntime.make(
 );
 
 /** Runs a dashboard mutation and returns a user-facing error message, or null on success. */
-export const runAction = (effect: Effect.Effect<unknown, DatabaseError | Forbidden, Db>) =>
+export const runAction = (effect: Effect.Effect<unknown, DatabaseError | Forbidden | InvalidPayload, Db>) =>
     runtime.runPromise(
         effect.pipe(
             Effect.as(null as string | null),
             Effect.catchTags({
                 Forbidden: (e) => Effect.succeed(e.message),
+                InvalidPayload: (e) => Effect.succeed(e.message),
                 DatabaseError: (e) =>
                     Effect.sync(() => {
                         console.error('dashboard action failed', e.cause);
@@ -46,6 +48,8 @@ export const runPublic = <A>(effect: Effect.Effect<A, DatabaseError | Forbidden 
             }),
         ),
     );
+
+export const proxyConfigFromEnv = () => runtime.runPromise(getProxyConfig);
 
 const proxyConfig = await proxyConfigFromEnv();
 
